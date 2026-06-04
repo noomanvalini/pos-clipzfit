@@ -28,33 +28,38 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
       const data = await res.json();
       
       const normalized = data.map(item => {
+        const prodName = item.productName || 'Produto Sem Nome';
+        const price = Number(item.price) || 0;
+        const qty = item.quantity !== undefined ? Number(item.quantity) : 0;
+
         // Use category from db if present, otherwise fall back to string decoding
         let category = item.category || 'Suplementos';
         if (!item.category) {
-          if (item.productName.toLowerCase().includes('whey') || item.productName.toLowerCase().includes('isolate')) {
+          const lowerName = prodName.toLowerCase();
+          if (lowerName.includes('whey') || lowerName.includes('isolate')) {
             category = 'Proteínas';
-          } else if (item.productName.toLowerCase().includes('pre-workout') || item.productName.toLowerCase().includes('xtreme')) {
+          } else if (lowerName.includes('pre-workout') || lowerName.includes('xtreme')) {
             category = 'Pré-treinos';
-          } else if (item.productName.toLowerCase().includes('bcaa') || item.productName.toLowerCase().includes('recovery')) {
+          } else if (lowerName.includes('bcaa') || lowerName.includes('recovery')) {
             category = 'Recuperação';
           }
         }
         
         // If there's an active promoPrice, we use it for checkout, but we store both prices
-        const hasPromo = item.promoPrice !== null && item.promoPrice !== undefined && Number(item.promoPrice) > 0 && Number(item.promoPrice) < Number(item.price);
-        const activePrice = hasPromo ? Number(item.promoPrice) : Number(item.price);
+        const hasPromo = item.promoPrice !== null && item.promoPrice !== undefined && Number(item.promoPrice) > 0 && Number(item.promoPrice) < price;
+        const activePrice = hasPromo ? Number(item.promoPrice) : price;
 
         return {
           id: item.productId,
-          name: item.productName,
-          originalPrice: Number(item.price),
+          name: prodName,
+          originalPrice: price,
           price: activePrice,
           promoPrice: item.promoPrice !== null && item.promoPrice !== undefined ? Number(item.promoPrice) : null,
           hasPromo,
-          image: item.image,
-          type: item.type,
+          image: item.image || 'inventory',
+          type: item.type || 'icon',
           category,
-          stock: item.quantity
+          stock: qty
         };
       });
       

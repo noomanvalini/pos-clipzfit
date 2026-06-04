@@ -201,23 +201,32 @@ async function seedDatabaseIfEmpty() {
       // Self-healing: Check and patch missing stock documents for all affiliates & products
       console.log("Checking for missing stock documents...");
       const allAffiliates = await db.collection('affiliates').get();
+      const allStocksSnap = await db.collection('stocks').get();
+      
+      const existingStockIds = new Set();
+      allStocksSnap.forEach(doc => {
+        existingStockIds.add(doc.id);
+      });
+
+      let missingDocsCount = 0;
       for (const affDoc of allAffiliates.docs) {
         const affId = affDoc.id;
         for (const prodDoc of allProds.docs) {
           const prodId = prodDoc.id;
           const stockDocId = `${affId}_${prodId}`;
-          const stockDoc = await db.collection('stocks').doc(stockDocId).get();
-          if (!stockDoc.exists) {
+          
+          if (!existingStockIds.has(stockDocId)) {
             console.log(`Self-healing: Creating missing stock doc for Affiliate ${affId} and Product ${prodId}...`);
             await db.collection('stocks').doc(stockDocId).set({
               affiliateId: affId,
               productId: prodId,
               quantity: 0
             });
+            missingDocsCount++;
           }
         }
       }
-      console.log("Self-healing check completed.");
+      console.log(`Self-healing check completed. Created ${missingDocsCount} missing stock documents.`);
     }
   } catch (err) {
     console.error("Error seeding database:", err);
