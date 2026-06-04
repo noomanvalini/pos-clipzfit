@@ -1135,6 +1135,247 @@ app.post('/api/notifications/clear', async (req, res) => {
   }
 });
 
+// Mercado Pago Checkout Pro Draft Endpoints
+
+// 16. POST /api/checkout/preference
+app.post('/api/checkout/preference', async (req, res) => {
+  const { affiliateId, items, customerCpf, customerEmail } = req.body;
+  
+  if (!affiliateId || !items || !items.length || !customerCpf) {
+    return res.status(400).json({ error: "Dados incompletos para geração do checkout." });
+  }
+
+  try {
+    // Validar existência da filial
+    const affDoc = await db.collection('affiliates').doc(affiliateId).get();
+    if (!affDoc.exists) {
+      return res.status(404).json({ error: "Parceiro não encontrado." });
+    }
+    const affiliate = affDoc.data();
+
+    // Validar estoque disponível localmente antes de gerar a preferência
+    for (const item of items) {
+      const stockDoc = await db.collection('stocks').doc(`${affiliateId}_${item.productId}`).get();
+      const availableStock = stockDoc.exists ? stockDoc.data().quantity : 0;
+      if (availableStock < item.quantity) {
+        return res.status(400).json({ error: `Estoque insuficiente para: ${item.name}. Disponível: ${availableStock}.` });
+      }
+    }
+
+    // Criar registro de venda pendente no Firestore
+    const pendingSaleId = `PND-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    let subtotal = 0;
+    items.forEach(item => {
+      subtotal += item.price * item.quantity;
+    });
+
+    const pendingSale = {
+      id: pendingSaleId,
+      affiliateId,
+      affiliateName: affiliate.name,
+      amount: Number(subtotal.toFixed(2)),
+      commissionRate: affiliate.commissionRate,
+      customerCpf,
+      customerEmail: customerEmail || null,
+      items,
+      status: "Pending",
+      createdAt: new Date().toISOString()
+    };
+    await db.collection('pending_sales').doc(pendingSaleId).set(pendingSale);
+
+    // Configurar chamada para API do Mercado Pago
+    const mpAccessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || "TEST-ACCESS-TOKEN-MOCK";
+    
+    // Valor fallback para testes sem token real configurado
+    let initPoint = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=mock_${pendingSaleId}`;
+    
+    if (process.env.MERCADO_PAGO_ACCESS_TOKEN) {
+      try {
+        const mpItems = items.map(item => ({
+          title: item.name,
+          quantity: Number(item.quantity),
+          unit_price: Number(item.price),
+          currency_id: "BRL"
+        }));
+
+        const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${mpAccessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            items: mpItems,
+            external_reference: pendingSaleId,
+            back_urls: {
+              success: `${req.protocol}://${req.get('host')}/checkout/success`,
+              failure: `${req.protocol}://${req.get('host')}/checkout/failure`,
+              pending: `${req.protocol}://${req.get('host')}/checkout/pending`
+            },
+            auto_return: "approved"
+          })
+        });
+
+        if (response.ok) {
+          const mpData = await response.json();
+          initPoint = mpData.init_point;
+        } else {
+          console.error("Mercado Pago Preference API error:", await response.text());
+        }
+      } catch (mpErr) {
+        console.error("Failed to fetch preference from Mercado Pago:", mpErr);
+      }
+    } else {
+      console.log(`[MOCK MP] Gerado checkout preferência fictício para a venda pendente: ${pendingSaleId}`);
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      pendingSaleId,
+      init_point: initPoint 
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 17. POST /api/webhooks/mercadopago
+app.post('/api/webhooks/mercadopago', async (req, res) => {
+  const paymentId = req.body?.data?.id || req.query?.id;
+  const type = req.body?.type || req.query?.topic;
+
+  // Parâmetros para testes de integração local simulando a aprovação
+  const isMockTest = req.body?.isMockTest === true;
+  const mockPendingSaleId = req.body?.pendingSaleId;
+
+  console.log(`[Webhook MP] Notificação recebida: tipo=${type}, pagamentoId=${paymentId}`);
+
+  if (!paymentId && !isMockTest) {
+    return res.status(400).json({ error: "ID de pagamento não fornecido." });
+  }
+
+  try {
+    let pendingSaleId = null;
+    let paymentStatus = null;
+
+    if (isMockTest) {
+      pendingSaleId = mockPendingSaleId;
+      paymentStatus = req.body?.status || "approved";
+      console.log(`[Webhook MP] Processando como teste simulado local. Status=${paymentStatus}`);
+    } else if (type === 'payment' || req.query?.topic === 'payment') {
+      const mpAccessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || "TEST-ACCESS-TOKEN-MOCK";
+      
+      if (process.env.MERCADO_PAGO_ACCESS_TOKEN) {
+        const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+          headers: {
+            'Authorization': `Bearer ${mpAccessToken}`
+          }
+        });
+
+        if (response.ok) {
+          const paymentData = await response.json();
+          paymentStatus = paymentData.status;
+          pendingSaleId = paymentData.external_reference;
+        } else {
+          console.error(`[Webhook MP] Erro ao consultar pagamento ${paymentId}:`, await response.text());
+          return res.status(502).json({ error: "Falha ao consultar detalhes do pagamento no Mercado Pago." });
+        }
+      } else {
+        console.log("[Webhook MP] Sem token do Mercado Pago. Usando simulação fallback com ID:", paymentId);
+        return res.status(200).json({ message: "Mock webhook recebido (ignorado por falta de token)." });
+      }
+    } else {
+      return res.status(200).json({ message: "Tópico de evento ignorado." });
+    }
+
+    if (!pendingSaleId) {
+      return res.status(400).json({ error: "Referência externa (pendingSaleId) não encontrada no pagamento." });
+    }
+
+    const pendingRef = db.collection('pending_sales').doc(pendingSaleId);
+    const pendingDoc = await pendingRef.get();
+    if (!pendingDoc.exists) {
+      return res.status(404).json({ error: `Venda pendente ${pendingSaleId} não encontrada.` });
+    }
+
+    const pendingSale = pendingDoc.data();
+
+    if (pendingSale.status !== 'Pending') {
+      return res.status(200).json({ message: `Venda já foi processada anteriormente. Status atual: ${pendingSale.status}` });
+    }
+
+    if (paymentStatus === 'approved') {
+      // 1. Validar estoque local novamente (evitar inconsistências por race-conditions)
+      for (const item of pendingSale.items) {
+        const stockRef = db.collection('stocks').doc(`${pendingSale.affiliateId}_${item.productId}`);
+        const stockDoc = await stockRef.get();
+        const qtyAvailable = stockDoc.exists ? stockDoc.data().quantity : 0;
+        if (qtyAvailable < item.quantity) {
+          await pendingRef.update({ status: "Failed", error: `Estoque insuficiente para o produto: ${item.name}` });
+          return res.status(400).json({ error: "Estoque insuficiente durante a confirmação." });
+        }
+      }
+
+      // 2. Decrementar estoque
+      for (const item of pendingSale.items) {
+        const stockRef = db.collection('stocks').doc(`${pendingSale.affiliateId}_${item.productId}`);
+        await stockRef.update({
+          quantity: admin.firestore.FieldValue.increment(-Number(item.quantity))
+        });
+      }
+
+      // 3. Salvar transação oficial
+      const commissionAmount = pendingSale.amount * (pendingSale.commissionRate / 100);
+      const txId = `TRX-${Math.floor(100000 + Math.random() * 900000)}`;
+      const transaction = {
+        id: txId,
+        affiliateId: pendingSale.affiliateId,
+        affiliateName: pendingSale.affiliateName,
+        amount: pendingSale.amount,
+        tax: 0.00,
+        total: pendingSale.amount,
+        commission: Number(commissionAmount.toFixed(2)),
+        date: new Date().toISOString(),
+        paymentMethod: "Mercado Pago",
+        customerCpf: pendingSale.customerCpf,
+        customerEmail: pendingSale.customerEmail,
+        items: pendingSale.items,
+        mpPaymentId: paymentId || "MOCK-PAYMENT"
+      };
+      await db.collection('transactions').doc(txId).set(transaction);
+
+      // 4. Atualizar métricas acumuladas do lojista
+      const affRef = db.collection('affiliates').doc(pendingSale.affiliateId);
+      await affRef.update({
+        totalSales: admin.firestore.FieldValue.increment(transaction.amount),
+        commissionBalance: admin.firestore.FieldValue.increment(transaction.commission)
+      });
+
+      // 5. Atualizar venda pendente para Aprovada
+      await pendingRef.update({
+        status: "Approved",
+        transactionId: txId,
+        updatedAt: new Date().toISOString()
+      });
+
+      console.log(`[Webhook MP] Venda ${pendingSaleId} aprovada e faturada como ${txId}!`);
+      return res.status(200).json({ success: true, message: "Pagamento aprovado e processado com sucesso.", transactionId: txId });
+    } else {
+      await pendingRef.update({
+        status: paymentStatus === 'rejected' ? 'Rejected' : 'Cancelled',
+        updatedAt: new Date().toISOString()
+      });
+      console.log(`[Webhook MP] Venda ${pendingSaleId} foi atualizada para status: ${paymentStatus}`);
+      return res.status(200).json({ success: true, message: `Status da venda atualizado para ${paymentStatus}.` });
+    }
+
+  } catch (err) {
+    console.error("[Webhook MP] Erro no processamento:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Conditionally listen locally
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   app.listen(PORT, () => {
