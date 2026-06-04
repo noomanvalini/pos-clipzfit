@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+@theme {
+  --color-on-secondary-container: #ff9a8e;
+  --color-inverse-primary: #5b6400;
+  --color-on-primary: #2e3300;
+  --color-on-secondary-fixed: #410002;
+  --color-background: #0d1117;
+  --color-tertiary: #eff4ff;
+  --color-surface-container-lowest: #0c0f0e;
+  --color-on-primary-fixed-variant: #444b00;
+  --color-secondary-fixed-dim: #ffb4ab;
+  --color-surface-container-highest: #333535;
+  --color-on-primary-fixed: #1a1d00;
+  --color-surface-variant: #21262d;
+  --color-on-tertiary-container: #0061a0;
+  --color-on-error: #690005;
+  --color-primary-fixed-dim: #c2cf46;
+  --color-on-background: #e2e2e2;
+  --color-on-tertiary: #003257;
+  --color-tertiary-fixed: #d1e4ff;
+  --color-on-surface-variant: #8b949e;
+  --color-surface-dim: #0d1117;
+  --color-primary-container: #d3e156;
+  --color-surface: #0d1117;
+  --color-surface-container-high: #21262d;
+  --color-secondary: #ffb4ab;
+  --color-tertiary-fixed-dim: #9dcaff;
+  --color-on-error-container: #ffdad6;
+  --color-on-tertiary-fixed-variant: #00497b;
+  --color-error: #ffb4ab;
+  --color-tertiary-container: #bddaff;
+  --color-surface-container: #161b22;
+  --color-on-secondary-fixed-variant: #8b1916;
+  --color-on-surface: #f0f6fc;
+  --color-on-secondary: #690005;
+  --color-on-tertiary-fixed: #001d35;
+  --color-secondary-container: #8b1916;
+  --color-surface-container-low: #161b22;
+  --color-surface-bright: #30363d;
+  --color-on-primary-container: #0d1117;
+  --color-error-container: #93000a;
+  --color-primary: #d3e156;
+  --color-outline: #30363d;
+  --color-inverse-on-surface: #2f3130;
+  --color-secondary-fixed: #ffdad6;
+  --color-surface-tint: #c2cf46;
+  --color-inverse-surface: #e2e2e2;
+  --color-outline-variant: #30363d;
+  --color-primary-fixed: #deec60;
+
+  /* Fonts */
+  --font-display: "Geist", sans-serif;
+  --font-headline-lg: "Geist", sans-serif;
+  --font-headline-md: "Geist", sans-serif;
+  --font-body-lg: "Geist", sans-serif;
+  --font-body-md: "Geist", sans-serif;
+  --font-body-sm: "Geist", sans-serif;
+  --font-label-md: "JetBrains Mono", monospace;
+  --font-label-sm: "JetBrains Mono", monospace;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8b949e;
+}
+
+body {
+  background-color: #0d1117;
+  color: #c9d1d9;
+  font-family: "Geist", sans-serif;
+  overflow-x: hidden;
+}
+
+/* Glassmorphism & Tonal elevations */
+.premium-card {
+  background: rgba(22, 27, 34, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(48, 54, 61, 0.6);
+  border-radius: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.premium-card:hover {
+  border-color: rgba(211, 225, 86, 0.4);
+  box-shadow: 0 0 15px rgba(211, 225, 86, 0.05);
+  transform: translateY(-2px);
+}
+
+.danger-card:hover {
+  border-color: rgba(255, 110, 97, 0.4);
+  box-shadow: 0 0 15px rgba(255, 110, 97, 0.05);
+}
+
+.glass-modal {
+  background: rgba(22, 27, 34, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(48, 54, 61, 0.8);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Subtle outer glow transitions */
+.glow-effect {
+  position: relative;
+}
+
+.glow-effect::before {
+  content: '';
+  position: absolute;
+  top: -1px; left: -1px; right: -1px; bottom: -1px;
+  background: linear-gradient(135deg, #d3e156, transparent);
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: inherit;
+}
+
+.glow-effect:hover::before {
+  opacity: 0.15;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Status colors */
+.badge-active {
+  background: rgba(211, 225, 86, 0.1);
+  color: #d3e156;
+  border: 1px solid rgba(211, 225, 86, 0.2);
+}
+
+.badge-inactive {
+  background: rgba(255, 110, 97, 0.1);
+  color: #ff6e61;
+  border: 1px solid rgba(255, 110, 97, 0.2);
+}
+
+/* Layout helpers */
+.p-margin-desktop {
+  padding: 32px;
+}
+.mb-lg {
+  margin-bottom: 24px;
+}
+.gap-sm {
+  gap: 8px;
+}
+.p-sm {
+  padding: 8px;
+}
+.mb-sm {
+  margin-bottom: 8px;
+}
+.mb-xs {
+  margin-bottom: 4px;
+}
+.p-xs {
+  padding: 4px;
+}

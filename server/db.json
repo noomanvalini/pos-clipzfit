@@ -1,0 +1,356 @@
+{
+  "products": [
+    {
+      "id": "prod-1",
+      "name": "Whey Isolate Pro",
+      "price": 45,
+      "image": "https://lh3.googleusercontent.com/aida-public/AB6AXuCfMPSqad29wDPlzWUlkhJj81FCvmX5-eXKrFdm6lBZXYlT1BNEWL4dDrzwd8FyokdWRdpG75hU0lo9ez4nq-9tbB1uDWi-cE9DisVnIQl9UkIAy9-06doqDLmHoJUvFGwTEBcYU8SJC1vs4ovt6PDLQk_6hVPKgNZgFuOIDcpjxIKQ-hBJXGZOwOwk4z8O4hGGJhU3HO8VLdLkyWFD9WOlzN7qfaK8A51HU3H3gBqicribW7nNNZHeEUPxWh3vp7HvOXAZu80J7faI",
+      "type": "image"
+    },
+    {
+      "id": "prod-2",
+      "name": "Pre-Workout Xtreme",
+      "price": 32.5,
+      "image": "https://lh3.googleusercontent.com/aida-public/AB6AXuB6zp1m0c_XtPmvcfA3gpHG-gev29iVfDkBfzVC9MQLW6nPNWdkrGhaJ96rpjK4bqzBscc9D4-oUJjmFGAhTanBf12e0drRDJzw0f943EMgwhMnfzJZD17t1XyGBnJVlAhy8j-ikZYQbFMAncDg0d2QLedKRPVkXoTXUUG7XDeXKaiM6aRHO7IH1WS6rxheQtYnycS-uILp5cpd0SKE2F3CYzowQRfPAlpLyOUsvX8JpZhEW1-lj8p3FOj8ln86Djq6TLxorIheZSw2",
+      "type": "image"
+    },
+    {
+      "id": "prod-3",
+      "name": "BCAA Recovery",
+      "price": 28,
+      "image": "medication",
+      "type": "icon"
+    }
+  ],
+  "affiliates": [
+    {
+      "id": "AFF-1001",
+      "name": "ClipzFIT Centro",
+      "location": "São Paulo - SP",
+      "commissionRate": 15,
+      "totalSales": 12931,
+      "commissionBalance": 51.9,
+      "status": "Active",
+      "email": "centro@clipzfit.com",
+      "password": "password123"
+    },
+    {
+      "id": "AFF-1002",
+      "name": "ClipzFIT Barra",
+      "location": "Rio de Janeiro - RJ",
+      "commissionRate": 12,
+      "totalSales": 8200,
+      "commissionBalance": 984,
+      "status": "Active",
+      "email": "barra@clipzfit.com",
+      "password": "password123"
+    },
+    {
+      "id": "AFF-1003",
+      "name": "ClipzFIT Savassi",
+      "location": "Belo Horizonte - MG",
+      "commissionRate": 15,
+      "totalSales": 73,
+      "commissionBalance": 10.95,
+      "status": "Inactive",
+      "email": "savassi@clipzfit.com",
+      "password": "password123"
+    },
+    {
+      "id": "AFF-9004",
+      "name": "Wellness Premium",
+      "location": "Catanduva - SP",
+      "commissionRate": 15,
+      "totalSales": 0,
+      "commissionBalance": 0,
+      "status": "Active",
+      "email": "wellnesspremium@clipzfit.com",
+      "password": "password123"
+    }
+  ],
+  "transactions": [
+    {
+      "id": "TRX-3701",
+      "affiliateId": "AFF-1001",
+      "affiliateName": "ClipzFIT Centro",
+      "amount": 65,
+      "tax": 5.2,
+      "total": 70.2,
+      "commission": 9.75,
+      "date": "2026-06-03T23:47:35.390Z",
+      "paymentMethod": "Cash",
+      "items": [
+        {
+          "productId": "prod-2",
+          "name": "Pre-Workout Xtreme",
+          "quantity": 2,
+          "price": 32.5
+        }
+      ]
+    },
+    {
+      "id": "TRX-3714",
+      "affiliateId": "AFF-1001",
+      "affiliateName": "ClipzFIT Centro",
+      "amount": 135,
+      "tax": 10.8,
+      "total": 145.8,
+      "commission": 20.25,
+      "date": "2026-06-03T23:47:26.800Z",
+      "paymentMethod": "Cash",
+      "items": [
+        {
+          "productId": "prod-1",
+          "name": "Whey Isolate Pro",
+          "quantity": 3,
+          "price": 45
+        }
+      ]
+    },
+    {
+      "id": "TRX-9034",
+      "affiliateId": "AFF-1001",
+      "affiliateName": "ClipzFIT Centro",
+      "amount": 56,
+      "tax": 4.48,
+      "total": 60.48,
+      "commission": 8.4,
+      "date": "2026-06-03T23:41:52.206Z",
+      "paymentMethod": "Cash",
+      "items": [
+        {
+          "productId": "prod-3",
+          "name": "BCAA Recovery",
+          "quantity": 2,
+          "price": 28
+        }
+      ]
+    },
+    {
+      "id": "TRX-7941",
+      "affiliateId": "AFF-1001",
+      "affiliateName": "ClipzFIT Centro",
+      "amount": 90,
+      "tax": 7.2,
+      "total": 97.2,
+      "commission": 13.5,
+      "date": "2026-06-03T23:40:42.074Z",
+      "paymentMethod": "Cash",
+      "items": [
+        {
+          "productId": "prod-1",
+          "name": "Whey Isolate Pro",
+          "quantity": 2,
+          "price": 45
+        }
+      ]
+    },
+    {
+      "id": "TRX-9104",
+      "affiliateId": "AFF-1003",
+      "affiliateName": "ClipzFIT Savassi",
+      "amount": 73,
+      "tax": 5.84,
+      "total": 78.84,
+      "commission": 10.95,
+      "date": "2026-06-03T23:36:43.977Z",
+      "paymentMethod": "Dinheiro",
+      "items": [
+        {
+          "productId": "prod-1",
+          "name": "Whey Isolate Pro",
+          "quantity": 1,
+          "price": 45
+        },
+        {
+          "productId": "prod-3",
+          "name": "BCAA Recovery",
+          "quantity": 1,
+          "price": 28
+        }
+      ]
+    },
+    {
+      "id": "TRX-9337",
+      "affiliateId": "AFF-1001",
+      "affiliateName": "ClipzFIT Centro",
+      "amount": 90,
+      "tax": 7.2,
+      "total": 97.2,
+      "commission": 13.5,
+      "date": "2026-06-03T23:35:11.084Z",
+      "paymentMethod": "Cartão",
+      "items": [
+        {
+          "productId": "prod-1",
+          "name": "Whey Isolate Pro",
+          "quantity": 2,
+          "price": 45
+        }
+      ]
+    },
+    {
+      "id": "TRX-1338",
+      "affiliateId": "AFF-1001",
+      "affiliateName": "ClipzFIT Centro",
+      "amount": 45,
+      "tax": 3.6,
+      "total": 48.6,
+      "commission": 6.75,
+      "date": "2026-06-03T23:34:51.511Z",
+      "paymentMethod": "Dinheiro",
+      "items": [
+        {
+          "productId": "prod-1",
+          "name": "Whey Isolate Pro",
+          "quantity": 1,
+          "price": 45
+        }
+      ]
+    },
+    {
+      "id": "TRX-9982",
+      "affiliateId": "AFF-1001",
+      "affiliateName": "ClipzFIT Centro",
+      "amount": 45,
+      "commission": 6.75,
+      "date": "2026-06-03T21:06:37.753Z",
+      "paymentMethod": "Cash",
+      "items": [
+        {
+          "productId": "prod-1",
+          "name": "Whey Isolate Pro",
+          "quantity": 1,
+          "price": 45
+        }
+      ]
+    },
+    {
+      "id": "TRX-9981",
+      "affiliateId": "AFF-1001",
+      "affiliateName": "ClipzFIT Centro",
+      "amount": 120,
+      "commission": 18,
+      "date": "2026-06-03T19:07:37.754Z",
+      "paymentMethod": "Card",
+      "items": [
+        {
+          "productId": "prod-2",
+          "name": "Pre-Workout Xtreme",
+          "quantity": 2,
+          "price": 32.5
+        }
+      ]
+    }
+  ],
+  "withdrawals": [
+    {
+      "id": "WD-4892",
+      "affiliateId": "AFF-1001",
+      "affiliateName": "ClipzFIT Centro",
+      "amount": 1887.75,
+      "date": "2026-06-03T23:35:22.829Z"
+    }
+  ],
+  "stocks": {
+    "AFF-1001": {
+      "prod-1": 25,
+      "prod-2": 4,
+      "prod-3": 25
+    },
+    "AFF-1002": {
+      "prod-1": 10,
+      "prod-2": 5,
+      "prod-3": 12
+    },
+    "AFF-1003": {
+      "prod-1": 0,
+      "prod-2": 0,
+      "prod-3": 0
+    },
+    "AFF-9004": {
+      "prod-1": 20,
+      "prod-2": 20,
+      "prod-3": 20
+    }
+  },
+  "replenishmentRequests": [
+    {
+      "id": "REQ-4306",
+      "affiliateId": "AFF-1001",
+      "affiliateName": "ClipzFIT Centro",
+      "productId": "prod-1",
+      "productName": "Whey Isolate Pro",
+      "quantity": 10,
+      "status": "Pendente",
+      "date": "2026-06-04T14:06:38.953Z"
+    },
+    {
+      "id": "REQ-2158",
+      "affiliateId": "AFF-1001",
+      "affiliateName": "ClipzFIT Centro",
+      "productId": "prod-2",
+      "productName": "Pre-Workout Xtreme",
+      "quantity": 15,
+      "status": "Pendente",
+      "date": "2026-06-04T14:02:50.915Z"
+    },
+    {
+      "id": "REQ-5915",
+      "affiliateId": "AFF-1001",
+      "affiliateName": "ClipzFIT Centro",
+      "productId": "prod-2",
+      "productName": "Pre-Workout Xtreme",
+      "quantity": 15,
+      "status": "Pendente",
+      "date": "2026-06-04T14:01:18.542Z"
+    },
+    {
+      "id": "REQ-4938",
+      "affiliateId": "AFF-1001",
+      "affiliateName": "ClipzFIT Centro",
+      "productId": "prod-2",
+      "productName": "Pre-Workout Xtreme",
+      "quantity": 10,
+      "status": "Pendente",
+      "date": "2026-06-04T13:56:41.283Z"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "NT-2395",
+      "title": "Reposição Solicitada",
+      "message": "Filial ClipzFIT Centro solicitou reposição de 10 un de Whey Isolate Pro.",
+      "date": "2026-06-04T14:06:38.954Z",
+      "read": false
+    },
+    {
+      "id": "NT-3125",
+      "title": "Reposição Solicitada",
+      "message": "Filial ClipzFIT Centro solicitou reposição de 15 un de Pre-Workout Xtreme.",
+      "date": "2026-06-04T14:02:50.915Z",
+      "read": false
+    },
+    {
+      "id": "NT-8330",
+      "title": "Reposição Solicitada",
+      "message": "Filial ClipzFIT Centro solicitou reposição de 15 un de Pre-Workout Xtreme.",
+      "date": "2026-06-04T14:01:18.542Z",
+      "read": false
+    },
+    {
+      "id": "NT-2263",
+      "title": "Reposição Solicitada",
+      "message": "Filial ClipzFIT Centro solicitou reposição de 10 un de Pre-Workout Xtreme.",
+      "date": "2026-06-04T13:56:41.284Z",
+      "read": false
+    },
+    {
+      "id": "NT-9999",
+      "title": "Notificação Inicial",
+      "message": "Bem-vindo ao sistema de controle de vendas e estoque do ClipzFIT.",
+      "date": "2026-06-04T13:52:29.847Z",
+      "read": false
+    }
+  ]
+}
