@@ -77,9 +77,41 @@ function AppContent() {
     fetchAffiliates();
     fetchNotifications();
 
-    // Set polling interval for notifications (every 4 seconds) to feel real-time
-    const interval = setInterval(fetchNotifications, 4000);
-    return () => clearInterval(interval);
+    let intervalId = null;
+
+    const startPolling = () => {
+      if (!intervalId) {
+        // Polling de 30 segundos é muito mais eficiente e suficiente para notificações
+        intervalId = setInterval(fetchNotifications, 30000);
+      }
+    };
+
+    const stopPolling = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        fetchNotifications();
+        startPolling();
+      }
+    };
+
+    if (!document.hidden) {
+      startPolling();
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [activeAffiliateId, user]);
 
   const handleLogout = () => {
