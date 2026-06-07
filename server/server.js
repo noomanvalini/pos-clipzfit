@@ -1,3 +1,4 @@
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -1193,14 +1194,20 @@ app.post('/api/checkout/preference', async (req, res) => {
     };
     await db.collection('pending_sales').doc(pendingSaleId).set(pendingSale);
 
-    // Configurar chamada para API do Mercado Pago
-    const mpAccessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || "TEST-ACCESS-TOKEN-MOCK";
-    
-    // Valor fallback para testes sem token real configurado
+    // Configurar chamada para API do Mercado Pago usando o SDK oficial (v2)
+    const token = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MERCADO_PAGO_ACCESS_TOKEN;
     let initPoint = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=mock_${pendingSaleId}`;
-    
-    if (process.env.MERCADO_PAGO_ACCESS_TOKEN) {
+
+    if (token && token.trim() !== "") {
       try {
+        const { MercadoPagoConfig, Preference } = require('mercadopago');
+        
+        // Inicializar o cliente com o Access Token
+        const client = new MercadoPagoConfig({ accessToken: token });
+        
+        // Criar a preferência
+        const preference = new Preference(client);
+
         const mpItems = items.map(item => ({
           title: item.name,
           quantity: Number(item.quantity),
@@ -1208,13 +1215,8 @@ app.post('/api/checkout/preference', async (req, res) => {
           currency_id: "BRL"
         }));
 
-        const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${mpAccessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
+        const response = await preference.create({
+          body: {
             items: mpItems,
             external_reference: pendingSaleId,
             back_urls: {
@@ -1223,20 +1225,20 @@ app.post('/api/checkout/preference', async (req, res) => {
               pending: `${req.protocol}://${req.get('host')}/checkout/pending`
             },
             auto_return: "approved"
-          })
+          }
         });
 
-        if (response.ok) {
-          const mpData = await response.json();
-          initPoint = mpData.init_point;
+        if (response && response.init_point) {
+          initPoint = response.init_point;
+          console.log(`[Mercado Pago SDK] Preferência criada com sucesso: ${response.id}`);
         } else {
-          console.error("Mercado Pago Preference API error:", await response.text());
+          console.error("[Mercado Pago SDK] Resposta inesperada do SDK:", response);
         }
       } catch (mpErr) {
-        console.error("Failed to fetch preference from Mercado Pago:", mpErr);
+        console.error("[Mercado Pago SDK] Falha ao criar preferência via SDK:", mpErr.message || mpErr);
       }
     } else {
-      console.log(`[MOCK MP] Gerado checkout preferência fictício para a venda pendente: ${pendingSaleId}`);
+      console.log(`[MOCK MP] Token não configurado em MERCADOPAGO_ACCESS_TOKEN. Usando checkout mock para venda pendente: ${pendingSaleId}`);
     }
 
     res.status(200).json({ 
@@ -1273,9 +1275,9 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
       paymentStatus = req.body?.status || "approved";
       console.log(`[Webhook MP] Processando como teste simulado local. Status=${paymentStatus}`);
     } else if (type === 'payment' || req.query?.topic === 'payment') {
-      const mpAccessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || "TEST-ACCESS-TOKEN-MOCK";
+      const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MERCADO_PAGO_ACCESS_TOKEN;
       
-      if (process.env.MERCADO_PAGO_ACCESS_TOKEN) {
+      if (mpAccessToken && mpAccessToken.trim() !== "") {
         const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
           headers: {
             'Authorization': `Bearer ${mpAccessToken}`
