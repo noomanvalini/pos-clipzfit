@@ -6,6 +6,7 @@ import AdminDashboard from './pages/AdminDashboard'
 import EstoqueLojista from './pages/EstoqueLojista'
 import EstoqueAdmin from './pages/EstoqueAdmin'
 import Login from './pages/Login'
+import CheckoutResult from './pages/CheckoutResult'
 import logoImg from './assets/logo.png'
 
 const API_BASE = '/api';
@@ -438,6 +439,9 @@ function AppContent() {
                 )
               } 
             />
+            <Route path="/checkout/success" element={<CheckoutResult status="success" />} />
+            <Route path="/checkout/failure" element={<CheckoutResult status="failure" />} />
+            <Route path="/checkout/pending" element={<CheckoutResult status="pending" />} />
             <Route path="*" element={<Navigate to="/pos" replace />} />
           </Routes>
         </main>

@@ -167,6 +167,45 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
         price: item.price
       }));
 
+      // Se o método de pagamento for cartão (Mercado Pago Checkout Pro)
+      if (selectedPaymentMethod === 'Card') {
+        const res = await fetch(`${API_BASE}/checkout/preference`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            affiliateId: activeAffiliateId,
+            items: itemsPayload,
+            customerCpf,
+            customerEmail: customerEmail.trim() || null
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          // Limpar carrinho e fechar modal
+          setCart([]);
+          setIsNfModalOpen(false);
+          setCustomerCpf('');
+          setCustomerEmail('');
+          fetchProductsAndStocks();
+          refreshTrigger();
+          
+          // Redirecionar para o Mercado Pago
+          if (data.init_point) {
+            window.location.href = data.init_point;
+          } else {
+            alert("Erro: URL de checkout do Mercado Pago não encontrada.");
+          }
+        } else {
+          const errData = await res.json();
+          alert(`Erro ao gerar checkout do Mercado Pago: ${errData.error}`);
+        }
+        return;
+      }
+
+      // Outros métodos de pagamento (Cash / Split) - Fluxo padrão direto
       const res = await fetch(`${API_BASE}/sales`, {
         method: 'POST',
         headers: {
