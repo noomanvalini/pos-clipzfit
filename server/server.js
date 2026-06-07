@@ -1220,9 +1220,9 @@ app.post('/api/checkout/preference', async (req, res) => {
             items: mpItems,
             external_reference: pendingSaleId,
             back_urls: {
-              success: `${req.protocol}://${req.get('host')}/checkout/success`,
-              failure: `${req.protocol}://${req.get('host')}/checkout/failure`,
-              pending: `${req.protocol}://${req.get('host')}/checkout/pending`
+              success: `https://${req.get('host')}/checkout/success`,
+              failure: `https://${req.get('host')}/checkout/failure`,
+              pending: `https://${req.get('host')}/checkout/pending`
             },
             auto_return: "approved"
           }
