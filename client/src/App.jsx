@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
 import POS from './pages/POS'
 import SellerDashboard from './pages/SellerDashboard'
@@ -34,6 +34,21 @@ function AppContent() {
   // Notifications states
   const [notifications, setNotifications] = useState([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const notifRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (notifRef.current && !notifRef.current.contains(event.target)) {
+        setIsNotifOpen(false);
+      }
+    }
+    if (isNotifOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isNotifOpen]);
 
   // Fetch affiliates list
   const fetchAffiliates = async () => {
@@ -297,14 +312,6 @@ function AppContent() {
 
         <div className="space-y-2.5">
           <button 
-            onClick={handleVoidTransaction}
-            className="w-full bg-[#FF6E61]/10 hover:bg-[#FF6E61] text-[#FF6E61] hover:text-[#FAFAF9] border border-[#FF6E61]/30 hover:border-[#FF6E61] font-mono text-xs py-2.5 px-4 rounded-lg transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-[18px]">cancel</span>
-            Cancelar Venda
-          </button>
-
-          <button 
             onClick={handleLogout}
             className="w-full bg-transparent hover:bg-[#21262d] text-[#8b949e] hover:text-[#f0f6fc] border border-[#30363d] font-mono text-xs py-2.5 px-4 rounded-lg transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
           >
@@ -382,73 +389,76 @@ function AppContent() {
               </div>
             )}
             
-            {/* Notifications Button with Drawer Trigger */}
-            <button 
-              onClick={() => setIsNotifOpen(!isNotifOpen)}
-              className="text-[#8b949e] hover:text-primary transition-all active:opacity-80 relative w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#21262d] cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[20px]">notifications</span>
-              {unreadNotifCount > 0 && (
-                <span className="absolute top-0 right-0 bg-[#ff6e61] text-[#fafafa] font-mono text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-md animate-pulse">
-                  {unreadNotifCount}
-                </span>
-              )}
-            </button>
-
-            {/* Notifications Dropdown Panel */}
-            {isNotifOpen && (
-              <div className="absolute top-12 right-0 w-80 bg-[#161b22] border border-[#30363d] rounded-lg shadow-2xl z-50 p-4 space-y-3 animate-fade-in">
-                <div className="flex justify-between items-center pb-2 border-b border-[#21262d]">
-                  <span className="font-sans font-bold text-xs text-[#f0f6fc] flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-primary text-[16px]">notifications</span>
-                    Notificações
+            {/* Notifications Container */}
+            <div ref={notifRef} className="relative">
+              {/* Notifications Button with Drawer Trigger */}
+              <button 
+                onClick={() => setIsNotifOpen(!isNotifOpen)}
+                className="text-[#8b949e] hover:text-primary transition-all active:opacity-80 relative w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#21262d] cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[20px]">notifications</span>
+                {unreadNotifCount > 0 && (
+                  <span className="absolute top-0 right-0 bg-[#ff6e61] text-[#fafafa] font-mono text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-md animate-pulse">
+                    {unreadNotifCount}
                   </span>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={handleReadAllNotifications} 
-                      className="text-[10px] font-mono text-primary hover:underline cursor-pointer"
-                    >
-                      Lidas
-                    </button>
-                    <span className="text-[#30363d] text-[10px] font-mono">|</span>
-                    <button 
-                      onClick={handleClearNotifications} 
-                      className="text-[10px] font-mono text-[#ff6e61] hover:underline cursor-pointer"
-                    >
-                      Limpar
-                    </button>
+                )}
+              </button>
+
+              {/* Notifications Dropdown Panel */}
+              {isNotifOpen && (
+                <div className="absolute top-12 right-0 w-80 bg-[#161b22] border border-[#30363d] rounded-lg shadow-2xl z-50 p-4 space-y-3 animate-fade-in">
+                  <div className="flex justify-between items-center pb-2 border-b border-[#21262d]">
+                    <span className="font-sans font-bold text-xs text-[#f0f6fc] flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-primary text-[16px]">notifications</span>
+                      Notificações
+                    </span>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={handleReadAllNotifications} 
+                        className="text-[10px] font-mono text-primary hover:underline cursor-pointer"
+                      >
+                        Lidas
+                      </button>
+                      <span className="text-[#30363d] text-[10px] font-mono">|</span>
+                      <button 
+                        onClick={handleClearNotifications} 
+                        className="text-[10px] font-mono text-[#ff6e61] hover:underline cursor-pointer"
+                      >
+                        Limpar
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto space-y-2">
+                    {notifications.length === 0 ? (
+                      <div className="text-center py-6 text-[11px] font-mono text-[#8b949e]">
+                        NENHUMA NOTIFICAÇÃO
+                      </div>
+                    ) : (
+                      notifications.map(n => (
+                        <div 
+                          key={n.id} 
+                          className={`p-3 rounded-lg border text-xs leading-relaxed transition-all relative ${
+                            n.read 
+                              ? 'bg-[#0d1117]/30 border-[#21262d] text-[#8b949e]' 
+                              : 'bg-[#0d1117]/70 border-[#30363d] text-[#f0f6fc]'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start gap-1 font-semibold mb-1">
+                            <span className={n.read ? 'text-[#8b949e]' : 'text-primary'}>{n.title}</span>
+                            <span className="text-[9px] font-mono text-[#8b949e] whitespace-nowrap mt-0.5">{formatDate(n.date)}</span>
+                          </div>
+                          <p className="font-sans text-[11px]">{n.message}</p>
+                          {!n.read && (
+                            <span className="absolute top-2.5 right-2 w-1.5 h-1.5 bg-primary rounded-full"></span>
+                          )}
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
-
-                <div className="max-h-60 overflow-y-auto space-y-2">
-                  {notifications.length === 0 ? (
-                    <div className="text-center py-6 text-[11px] font-mono text-[#8b949e]">
-                      NENHUMA NOTIFICAÇÃO
-                    </div>
-                  ) : (
-                    notifications.map(n => (
-                      <div 
-                        key={n.id} 
-                        className={`p-3 rounded-lg border text-xs leading-relaxed transition-all relative ${
-                          n.read 
-                            ? 'bg-[#0d1117]/30 border-[#21262d] text-[#8b949e]' 
-                            : 'bg-[#0d1117]/70 border-[#30363d] text-[#f0f6fc]'
-                        }`}
-                      >
-                        <div className="flex justify-between items-start gap-1 font-semibold mb-1">
-                          <span className={n.read ? 'text-[#8b949e]' : 'text-primary'}>{n.title}</span>
-                          <span className="text-[9px] font-mono text-[#8b949e] whitespace-nowrap mt-0.5">{formatDate(n.date)}</span>
-                        </div>
-                        <p className="font-sans text-[11px]">{n.message}</p>
-                        {!n.read && (
-                          <span className="absolute top-2.5 right-2 w-1.5 h-1.5 bg-primary rounded-full"></span>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
+              )}
+            </div>
 
             <button className="text-[#8b949e] hover:text-primary transition-all active:opacity-80 w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#21262d] cursor-pointer">
               <span className="material-symbols-outlined text-[20px]">account_circle</span>

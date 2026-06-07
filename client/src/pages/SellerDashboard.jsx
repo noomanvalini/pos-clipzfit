@@ -187,7 +187,8 @@ export default function SellerDashboard({ activeAffiliateId, refreshTrigger }) {
               </div>
             </div>
             
-            {/* Sales Goal Progress Bar */}
+            {/* Sales Goal Progress Bar (Hidden temporarily, structure preserved) */}
+            {/* 
             <div className="space-y-2 pt-4 border-t border-[#21262d]">
               <div className="flex justify-between text-[11px] font-mono text-[#8b949e]">
                 <span>META MENSAL (R$ 20.000,00)</span>
@@ -200,6 +201,7 @@ export default function SellerDashboard({ activeAffiliateId, refreshTrigger }) {
                 ></div>
               </div>
             </div>
+            */}
           </div>
 
           {/* Card 2: Accumulated Commission Balance */}
@@ -226,16 +228,6 @@ export default function SellerDashboard({ activeAffiliateId, refreshTrigger }) {
                   )}
                 </div>
               </div>
-            </div>
-
-            <div className="relative z-10 mt-6 pt-4 border-t border-[#21262d] flex justify-end">
-              <button 
-                onClick={handleWithdrawFunds}
-                className="bg-primary text-[#0d1117] font-mono text-xs font-bold py-2.5 px-4 rounded-lg hover:bg-primary/95 transition-all duration-300 active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-md shadow-primary/10"
-              >
-                Sacar Comissão
-                <span className="material-symbols-outlined text-[16px] font-bold">arrow_forward</span>
-              </button>
             </div>
           </div>
         </div>
