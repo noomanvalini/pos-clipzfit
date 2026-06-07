@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } f
 import POS from './pages/POS'
 import SellerDashboard from './pages/SellerDashboard'
 import AdminDashboard from './pages/AdminDashboard'
+import ManagerDashboard from './pages/ManagerDashboard'
 import EstoqueLojista from './pages/EstoqueLojista'
 import EstoqueAdmin from './pages/EstoqueAdmin'
 import Login from './pages/Login'
@@ -57,12 +58,17 @@ function AppContent() {
       const data = await res.json();
       setAffiliates(data);
       
-      const active = data.find(a => a.id === activeAffiliateId);
+      // Filter if manager
+      const allowedAffiliates = user && user.role === 'manager'
+        ? data.filter(a => a.managerId === user.managerId)
+        : data;
+      
+      const active = allowedAffiliates.find(a => a.id === activeAffiliateId);
       if (active) {
         setActiveAffiliate(active);
-      } else if (data.length > 0) {
-        setActiveAffiliateId(data[0].id);
-        setActiveAffiliate(data[0]);
+      } else if (allowedAffiliates.length > 0) {
+        setActiveAffiliateId(allowedAffiliates[0].id);
+        setActiveAffiliate(allowedAffiliates[0]);
       }
     } catch (err) {
       console.error("Error fetching affiliates:", err);
@@ -73,9 +79,14 @@ function AppContent() {
   const fetchNotifications = async () => {
     if (!user) return;
     try {
-      const query = user.role === 'admin' 
-        ? '?role=admin' 
-        : `?role=lojista&affiliateId=${activeAffiliateId}`;
+      let query = '';
+      if (user.role === 'admin') {
+        query = '?role=admin';
+      } else if (user.role === 'manager') {
+        query = '?role=manager';
+      } else {
+        query = `?role=lojista&affiliateId=${activeAffiliateId}`;
+      }
       const res = await fetch(`${API_BASE}/notifications${query}`);
       if (res.ok) {
         const data = await res.json();
@@ -91,9 +102,9 @@ function AppContent() {
     fetchNotifications();
   };
 
-  // Effect to lock affiliate if lojista
+  // Effect to lock affiliate if lojista/vendor
   useEffect(() => {
-    if (user && user.role === 'lojista' && user.affiliateId) {
+    if (user && (user.role === 'lojista' || user.role === 'vendor') && user.affiliateId) {
       setActiveAffiliateId(user.affiliateId);
     }
   }, [user]);
@@ -107,7 +118,6 @@ function AppContent() {
 
     const startPolling = () => {
       if (!intervalId) {
-        // Polling de 30 segundos é muito mais eficiente e suficiente para notificações
         intervalId = setInterval(fetchNotifications, 30000);
       }
     };
@@ -145,17 +155,10 @@ function AppContent() {
     setUser(null);
   };
 
-  const handleVoidTransaction = () => {
-    if (window.confirm("Deseja realmente cancelar a venda atual? Todo o carrinho será limpo.")) {
-      const event = new CustomEvent('clear-cart');
-      window.dispatchEvent(event);
-    }
-  };
-
   const handleReadAllNotifications = async () => {
     if (!user) return;
     try {
-      const body = { role: user.role };
+      const body = { role: user.role === 'admin' ? 'admin' : user.role === 'manager' ? 'manager' : 'lojista' };
       if (body.role === 'lojista') {
         body.affiliateId = activeAffiliateId;
       }
@@ -175,7 +178,7 @@ function AppContent() {
   const handleClearNotifications = async () => {
     if (!user) return;
     try {
-      const body = { role: user.role };
+      const body = { role: user.role === 'admin' ? 'admin' : user.role === 'manager' ? 'manager' : 'lojista' };
       if (body.role === 'lojista') {
         body.affiliateId = activeAffiliateId;
       }
@@ -207,6 +210,11 @@ function AppContent() {
     return <Login onLoginSuccess={setUser} />;
   }
 
+  // Filter affiliates list for manager switcher
+  const allowedAffiliatesForSwitcher = affiliates.filter(aff => 
+    userRole === 'admin' || (userRole === 'manager' && aff.managerId === user.managerId)
+  );
+
   return (
     <div className="flex h-dvh overflow-hidden bg-[#0d1117] text-[#c9d1d9] font-sans select-none relative">
       
@@ -232,6 +240,21 @@ function AppContent() {
         <div className="flex-1 space-y-2">
           <div className="px-4 pb-2 text-[11px] font-mono uppercase tracking-wider text-[#8b949e]">Menu</div>
           
+          {/* Manager Dashboard view */}
+          {userRole === 'manager' && (
+            <Link 
+              to="/manager" 
+              className={`flex items-center gap-3 px-4 py-3 transition-all duration-300 active:scale-95 rounded-lg font-sans text-sm ${
+                location.pathname === '/manager' 
+                  ? 'bg-primary text-[#0d1117] font-bold shadow-md shadow-primary/10' 
+                  : 'text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#21262d]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: location.pathname === '/manager' ? "'FILL' 1" : "'FILL' 0" }}>manage_accounts</span>
+              Gerente Regional
+            </Link>
+          )}
+
           <Link 
             to="/dashboard" 
             className={`flex items-center gap-3 px-4 py-3 transition-all duration-300 active:scale-95 rounded-lg font-sans text-sm ${
@@ -298,7 +321,7 @@ function AppContent() {
           )}
         </div>
         
-        {/* Active POS Location card */}
+        {/* Active POS Location card (Admins & Managers see current active select, Lojistas see locked card) */}
         <div className="p-4 rounded-lg bg-[#21262d] border border-[#30363d] mb-6 space-y-2">
           <div className="font-mono text-[10px] text-[#8b949e] uppercase tracking-wider">Local de Venda Ativo</div>
           <div className="text-sm text-[#f0f6fc] font-bold truncate">
@@ -334,6 +357,14 @@ function AppContent() {
               <span className="material-symbols-outlined text-[22px]">menu</span>
             </button>
             <nav className="hidden sm:flex gap-6 font-mono text-[12px] uppercase tracking-wider">
+              {userRole === 'manager' && (
+                <Link 
+                  to="/manager" 
+                  className={`transition-all duration-300 hover:text-primary ${location.pathname === '/manager' ? 'text-primary font-bold border-b border-primary pb-5' : 'text-[#8b949e]'}`}
+                >
+                  Gerente
+                </Link>
+              )}
               <Link 
                 to="/dashboard" 
                 className={`transition-all duration-300 hover:text-primary ${location.pathname === '/dashboard' ? 'text-primary font-bold border-b border-primary pb-5' : 'text-[#8b949e]'}`}
@@ -373,8 +404,8 @@ function AppContent() {
           </div>
           
           <div className="flex items-center gap-4 relative">
-            {/* Affiliate Switcher (Admin Only) */}
-            {userRole === 'admin' && (
+            {/* Affiliate Switcher (Admin and Manager) */}
+            {(userRole === 'admin' || userRole === 'manager') && (
               <div className="flex items-center gap-2 bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-1.5">
                 <span className="material-symbols-outlined text-primary text-[18px]">storefront</span>
                 <select
@@ -382,7 +413,7 @@ function AppContent() {
                   onChange={(e) => setActiveAffiliateId(e.target.value)}
                   className="bg-transparent text-[#f0f6fc] rounded text-xs font-mono focus:outline-none cursor-pointer pr-4"
                 >
-                  {affiliates.map(aff => (
+                  {allowedAffiliatesForSwitcher.map(aff => (
                     <option key={aff.id} value={aff.id} className="bg-[#161b22] text-[#f0f6fc]">{aff.name}</option>
                   ))}
                 </select>
@@ -406,23 +437,23 @@ function AppContent() {
 
               {/* Notifications Dropdown Panel */}
               {isNotifOpen && (
-                <div className="absolute top-12 right-0 w-80 bg-[#161b22] border border-[#30363d] rounded-lg shadow-2xl z-50 p-4 space-y-3 animate-fade-in">
+                <div className="absolute top-12 right-0 w-80 bg-[#161b22] border border-[#30363d] rounded-lg shadow-2xl z-50 p-4 space-y-3 animate-fade-in font-sans">
                   <div className="flex justify-between items-center pb-2 border-b border-[#21262d]">
                     <span className="font-sans font-bold text-xs text-[#f0f6fc] flex items-center gap-1.5">
                       <span className="material-symbols-outlined text-primary text-[16px]">notifications</span>
                       Notificações
                     </span>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 font-mono">
                       <button 
                         onClick={handleReadAllNotifications} 
-                        className="text-[10px] font-mono text-primary hover:underline cursor-pointer"
+                        className="text-[10px] text-primary hover:underline cursor-pointer"
                       >
                         Lidas
                       </button>
-                      <span className="text-[#30363d] text-[10px] font-mono">|</span>
+                      <span className="text-[#30363d] text-[10px]">|</span>
                       <button 
                         onClick={handleClearNotifications} 
-                        className="text-[10px] font-mono text-[#ff6e61] hover:underline cursor-pointer"
+                        className="text-[10px] text-[#ff6e61] hover:underline cursor-pointer"
                       >
                         Limpar
                       </button>
@@ -480,6 +511,16 @@ function AppContent() {
                 )
               } 
             />
+            <Route 
+              path="/manager" 
+              element={
+                userRole === 'manager' ? (
+                  <ManagerDashboard />
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
+              } 
+            />
             <Route path="/pos" element={<POS activeAffiliateId={activeAffiliateId} refreshTrigger={triggerGlobalRefresh} />} />
             <Route path="/estoque" element={<EstoqueLojista activeAffiliateId={activeAffiliateId} />} />
             <Route 
@@ -495,7 +536,14 @@ function AppContent() {
             <Route path="/checkout/success" element={<CheckoutResult status="success" />} />
             <Route path="/checkout/failure" element={<CheckoutResult status="failure" />} />
             <Route path="/checkout/pending" element={<CheckoutResult status="pending" />} />
-            <Route path="*" element={<Navigate to="/pos" replace />} />
+            <Route 
+              path="*" 
+              element={
+                userRole === 'manager' 
+                  ? <Navigate to="/manager" replace /> 
+                  : <Navigate to="/pos" replace />
+              } 
+            />
           </Routes>
         </main>
       </div>
