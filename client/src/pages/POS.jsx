@@ -16,6 +16,7 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
   const [customerCpf, setCustomerCpf] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [activeMobileTab, setActiveMobileTab] = useState('catalog');
 
   // Fetch store-specific products and stock levels
   const fetchProductsAndStocks = async () => {
@@ -242,9 +243,33 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
   };
 
   return (
-    <div className="flex h-full bg-[#0d1117] animate-fade-in">
+    <div className="flex flex-col md:flex-row h-full bg-[#0d1117] animate-fade-in relative">
+      
+      {/* Mobile Tab Switcher */}
+      <div className="flex md:hidden border-b border-[#30363d] bg-[#161b22] shrink-0 font-mono text-xs z-20">
+        <button 
+          type="button"
+          onClick={() => setActiveMobileTab('catalog')}
+          className={`flex-1 py-4 text-center border-b-2 font-bold transition-all ${activeMobileTab === 'catalog' ? 'border-primary text-primary bg-primary/5' : 'border-transparent text-[#8b949e]'}`}
+        >
+          Catálogo
+        </button>
+        <button 
+          type="button"
+          onClick={() => setActiveMobileTab('cart')}
+          className={`flex-1 py-4 text-center border-b-2 font-bold flex justify-center items-center gap-1.5 transition-all ${activeMobileTab === 'cart' ? 'border-primary text-primary bg-primary/5' : 'border-transparent text-[#8b949e]'}`}
+        >
+          Carrinho
+          {cart.length > 0 && (
+            <span className="bg-primary text-[#0d1117] text-[10px] font-bold px-2 py-[1.5px] rounded-full">
+              {cart.reduce((sum, item) => sum + item.quantity, 0)}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Product Catalog Area */}
-      <section className="flex-1 p-8 overflow-y-auto flex flex-col">
+      <section className={`flex-1 p-4 md:p-8 overflow-y-auto flex flex-col ${activeMobileTab === 'catalog' ? 'flex' : 'hidden md:flex'}`}>
         {/* Header Title & Search */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div>
@@ -399,7 +424,7 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
       </section>
 
       {/* Shopping Cart Sidebar */}
-      <aside className="w-80 bg-[#161b22] border-l border-[#30363d] h-full flex flex-col z-30 shadow-2xl relative">
+      <aside className={`w-full md:w-80 bg-[#161b22] border-l border-[#30363d] h-full flex-col z-30 shadow-2xl relative ${activeMobileTab === 'cart' ? 'flex' : 'hidden md:flex'}`}>
         <div className="p-5 border-b border-[#30363d] flex justify-between items-center bg-[#161b22]/50">
           <div>
             <h2 className="font-sans text-lg font-bold text-[#f0f6fc]">Carrinho</h2>
@@ -487,7 +512,7 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
       {/* Intermediate NF-e Fiscal Data Modal */}
       {isNfModalOpen && (
         <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-          <div className="glass-modal rounded-xl p-6 max-w-md w-full border border-[#30363d] relative">
+          <div className="glass-modal rounded-xl p-6 max-w-md w-full border border-[#30363d] relative max-h-[95vh] overflow-y-auto">
             <button 
               onClick={() => setIsNfModalOpen(false)}
               className="absolute top-3 right-3 text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#161b22] w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer"

@@ -102,7 +102,7 @@ export default function EstoqueLojista({ activeAffiliateId }) {
   }
 
   return (
-    <div className="p-8 bg-[#0d1117] min-h-full animate-fade-in space-y-8">
+    <div className="p-4 md:p-8 bg-[#0d1117] min-h-full animate-fade-in space-y-6 md:space-y-8">
       <div className="max-w-7xl mx-auto space-y-6">
         <header>
           <h2 className="font-sans text-2xl font-bold text-[#f0f6fc] mb-1">Meu Estoque</h2>
@@ -110,7 +110,7 @@ export default function EstoqueLojista({ activeAffiliateId }) {
         </header>
 
         {/* Inventory Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {stocks.map((item) => {
             const isOutOfStock = item.quantity === 0;
             const isCritical = item.quantity > 0 && item.quantity < 5;
@@ -118,7 +118,7 @@ export default function EstoqueLojista({ activeAffiliateId }) {
             return (
               <div 
                 key={item.productId}
-                className="premium-card p-6 flex flex-col justify-between"
+                className="premium-card p-5 md:p-6 flex flex-col justify-between"
               >
                 <div>
                   <div className="flex justify-between items-start mb-4">
@@ -170,7 +170,7 @@ export default function EstoqueLojista({ activeAffiliateId }) {
         </div>
 
         {/* Recent Replenishment Requests Table */}
-        <div className="premium-card p-6 mt-6">
+        <div className="premium-card p-4 md:p-6 mt-6">
           <h3 className="font-mono text-xs text-[#8b949e] uppercase mb-4 font-bold tracking-wider">Solicitações de Abastecimento Recentes</h3>
           
           {requests.length === 0 ? (
@@ -179,7 +179,7 @@ export default function EstoqueLojista({ activeAffiliateId }) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse min-w-[600px]">
                 <thead>
                   <tr className="border-b border-[#21262d]">
                     <th className="pb-3 pt-1 px-4 uppercase font-mono text-xs text-[#8b949e] tracking-wider font-semibold">ID</th>
@@ -219,7 +219,7 @@ export default function EstoqueLojista({ activeAffiliateId }) {
       {/* Replenish Request Quantity Selection Modal */}
       {isRequestModalOpen && selectedProduct && (
         <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-          <div className="glass-modal rounded-xl p-6 max-w-sm w-full border border-[#30363d] relative">
+          <div className="glass-modal rounded-xl p-5 md:p-6 max-w-sm w-full border border-[#30363d] relative max-h-[90vh] overflow-y-auto">
             <button 
               onClick={() => setIsRequestModalOpen(false)}
               className="absolute top-3 right-3 text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#161b22] w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer"
@@ -276,7 +276,7 @@ export default function EstoqueLojista({ activeAffiliateId }) {
       {/* Replenish Alert Confirmation Modal */}
       {requestSuccess && selectedProduct && (
         <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-          <div className="glass-modal rounded-xl p-6 max-w-sm w-full flex flex-col items-center text-center space-y-4 border border-[#30363d]">
+          <div className="glass-modal rounded-xl p-6 max-w-sm w-full flex flex-col items-center text-center space-y-4 border border-[#30363d] max-h-[90vh] overflow-y-auto">
             <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center text-primary shadow-inner">
               <span className="material-symbols-outlined text-3xl font-bold">local_shipping</span>
             </div>

@@ -16,6 +16,12 @@ function AppContent() {
   const [affiliates, setAffiliates] = useState([]);
   const [activeAffiliateId, setActiveAffiliateId] = useState('AFF-1001');
   const [activeAffiliate, setActiveAffiliate] = useState(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Close mobile menu on route change
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
   
   // Auth state
   const [user, setUser] = useState(() => {
@@ -189,8 +195,16 @@ function AppContent() {
   return (
     <div className="flex h-screen overflow-hidden bg-[#0d1117] text-[#c9d1d9] font-sans select-none relative">
       
+      {/* Mobile Sidebar backdrop */}
+      {isMobileMenuOpen && (
+        <div 
+          onClick={() => setIsMobileMenuOpen(false)}
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs md:hidden"
+        ></div>
+      )}
+
       {/* Sidebar Navigation */}
-      <nav className="bg-[#161b22] border-r border-[#30363d] h-screen w-64 fixed left-0 top-0 flex flex-col p-6 z-40">
+      <nav className={`bg-[#161b22] border-r border-[#30363d] h-screen w-64 fixed top-0 flex flex-col p-6 z-50 transition-all duration-300 ${isMobileMenuOpen ? 'left-0' : '-left-full'} md:left-0`}>
         <div className="mb-8 flex flex-col items-center">
           <img 
             alt="ClipzFIT Logo" 
@@ -301,11 +315,18 @@ function AppContent() {
       </nav>
 
       {/* Main Content Area */}
-      <div className="flex-1 ml-64 flex flex-col min-w-0 h-full relative">
+      <div className="flex-1 ml-0 md:ml-64 flex flex-col min-w-0 h-full relative">
         {/* TopNavBar */}
-        <header className="fixed top-0 right-0 w-[calc(100%-16rem)] z-30 bg-[#0d1117] border-b border-[#30363d] flex justify-between items-center h-16 px-6">
-          <div className="flex items-center">
-            <nav className="flex gap-6 font-mono text-[12px] uppercase tracking-wider">
+        <header className="fixed top-0 right-0 w-full md:w-[calc(100%-16rem)] z-30 bg-[#0d1117] border-b border-[#30363d] flex justify-between items-center h-16 px-6">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden text-[#8b949e] hover:text-primary p-1.5 rounded-lg hover:bg-[#21262d] transition-all cursor-pointer flex items-center justify-center shrink-0"
+              title="Menu"
+            >
+              <span className="material-symbols-outlined text-[22px]">menu</span>
+            </button>
+            <nav className="hidden sm:flex gap-6 font-mono text-[12px] uppercase tracking-wider">
               <Link 
                 to="/dashboard" 
                 className={`transition-all duration-300 hover:text-primary ${location.pathname === '/dashboard' ? 'text-primary font-bold border-b border-primary pb-5' : 'text-[#8b949e]'}`}

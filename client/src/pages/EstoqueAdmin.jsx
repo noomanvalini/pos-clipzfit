@@ -257,8 +257,8 @@ export default function EstoqueAdmin({ refreshTrigger }) {
   }
 
   return (
-    <div className="p-8 bg-[#0d1117] min-h-full animate-fade-in space-y-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 bg-[#0d1117] min-h-full animate-fade-in space-y-6 md:space-y-8">
+      <div className="max-w-7xl mx-auto space-y-6 md:space-y-8">
         
         {/* Header Section */}
         <div>
@@ -269,7 +269,7 @@ export default function EstoqueAdmin({ refreshTrigger }) {
         </div>
 
         {/* CD Catalog & Products Section */}
-        <div className="premium-card p-6">
+        <div className="premium-card p-4 md:p-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
               <h3 className="font-sans font-bold text-base text-[#f0f6fc] flex items-center gap-2">
@@ -353,7 +353,7 @@ export default function EstoqueAdmin({ refreshTrigger }) {
         </div>
 
         {/* Master-Detail Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
           
           {/* Left: Lojistas List (Master) */}
           <div className="lg:col-span-4 space-y-4">
@@ -446,7 +446,7 @@ export default function EstoqueAdmin({ refreshTrigger }) {
                       </span>
                     </div>
 
-                    <div className="premium-card p-6 overflow-x-auto">
+                    <div className="premium-card p-4 md:p-6 overflow-x-auto">
                       {filteredStocks.length === 0 ? (
                         <div className="text-center py-12 text-[#8b949e] font-mono text-xs uppercase tracking-wider space-y-2">
                           <div>Nenhum produto em estoque nesta filial.</div>
@@ -520,7 +520,7 @@ export default function EstoqueAdmin({ refreshTrigger }) {
         </div>
 
         {/* Replenishment Requests Table */}
-        <div className="premium-card p-6">
+        <div className="premium-card p-4 md:p-6">
           <h3 className="font-mono text-xs text-[#8b949e] uppercase mb-4 font-bold tracking-wider">Solicitações de Abastecimento Recebidas</h3>
           
           {requests.length === 0 ? (
@@ -584,7 +584,7 @@ export default function EstoqueAdmin({ refreshTrigger }) {
       {/* Replenish Modal Form */}
       {isReplenishOpen && selectedStock && (
         <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-          <div className="glass-modal rounded-xl p-6 max-w-sm w-full border border-[#30363d] relative">
+          <div className="glass-modal rounded-xl p-5 md:p-6 max-w-sm w-full border border-[#30363d] relative max-h-[90vh] overflow-y-auto">
             <button 
               onClick={() => setIsReplenishOpen(false)}
               className="absolute top-3 right-3 text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#161b22] w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer"
@@ -646,7 +646,7 @@ export default function EstoqueAdmin({ refreshTrigger }) {
       {/* Product Create/Edit Modal */}
       {isProdModalOpen && (
         <div id="product-crud-modal" className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-          <div className="glass-modal rounded-xl p-6 max-w-md w-full border border-[#30363d] relative">
+          <div className="glass-modal rounded-xl p-5 md:p-6 max-w-md w-full border border-[#30363d] relative max-h-[90vh] overflow-y-auto">
             <button 
               onClick={() => setIsProdModalOpen(false)}
               className="absolute top-3 right-3 text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#161b22] w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer"

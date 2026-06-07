@@ -186,7 +186,7 @@ export default function AdminDashboard({ activeAffiliateId, refreshTrigger }) {
   }
 
   return (
-    <div className="p-8 bg-[#0d1117] min-h-full animate-fade-in">
+    <div className="p-4 md:p-8 bg-[#0d1117] min-h-full animate-fade-in">
       <div className="max-w-7xl mx-auto">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -194,11 +194,11 @@ export default function AdminDashboard({ activeAffiliateId, refreshTrigger }) {
             <h1 className="font-sans text-2xl font-bold text-[#f0f6fc]">Gestão de Parceiros</h1>
             <p className="font-sans text-xs text-[#8b949e] mt-1">Gerencie pontos de venda ativos e taxas contratuais de comissão.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             {affiliates.length > 0 && (
               <button
                 onClick={exportPartnersToCSV}
-                className="bg-transparent hover:bg-primary/10 text-primary border border-primary/30 hover:border-primary px-5 py-2.5 rounded-lg font-mono text-xs font-bold hover:opacity-95 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
+                className="bg-transparent hover:bg-primary/10 text-primary border border-primary/30 hover:border-primary px-5 py-2.5 rounded-lg font-mono text-xs font-bold hover:opacity-95 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 flex-1 sm:flex-initial justify-center"
               >
                 <span className="material-symbols-outlined text-[18px]">download</span>
                 Exportar CSV
@@ -206,7 +206,7 @@ export default function AdminDashboard({ activeAffiliateId, refreshTrigger }) {
             )}
             <button 
               onClick={handleOpenCreateModal}
-              className="bg-primary text-[#0d1117] px-5 py-2.5 rounded-lg font-mono text-xs font-bold hover:opacity-95 transition-opacity flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 shadow-md shadow-primary/10"
+              className="bg-primary text-[#0d1117] px-5 py-2.5 rounded-lg font-mono text-xs font-bold hover:opacity-95 transition-opacity flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 shadow-md shadow-primary/10 flex-1 sm:flex-initial justify-center"
             >
               <span className="material-symbols-outlined text-[18px] font-bold">add</span>
               Novo Parceiro
@@ -215,7 +215,7 @@ export default function AdminDashboard({ activeAffiliateId, refreshTrigger }) {
         </div>
 
         {/* Tabular Layout of Locations */}
-        <div className="premium-card p-6 overflow-x-auto">
+        <div className="premium-card p-4 md:p-6 overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="border-b border-[#21262d]">
@@ -281,7 +281,7 @@ export default function AdminDashboard({ activeAffiliateId, refreshTrigger }) {
       {/* Modal - New Seller Form */}
       {isModalOpen && (
         <div id="new-seller-modal" className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-          <div className="glass-modal rounded-xl p-6 max-w-md w-full border border-[#30363d] relative">
+          <div className="glass-modal rounded-xl p-5 md:p-6 max-w-md w-full border border-[#30363d] relative max-h-[90vh] overflow-y-auto">
             <button 
               onClick={() => setIsModalOpen(false)}
               className="absolute top-3 right-3 text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#161b22] w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer"
