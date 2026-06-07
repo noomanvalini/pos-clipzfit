@@ -230,6 +230,54 @@ async function seedDatabaseIfEmpty() {
       }
       console.log(`Self-healing check completed. Created ${missingDocsCount} missing stock documents.`);
     }
+
+    // Seed managers if the collection is empty
+    const managersSnap = await db.collection('managers').limit(1).get();
+    if (managersSnap.empty) {
+      console.log("Seeding initial managers...");
+      const initialManagers = [
+        {
+          id: "MGR-1001",
+          name: "Gerente Sul",
+          email: "sul@clipzfit.com",
+          password: "password123",
+          totalCommissionPercentage: 20,
+          commissionBalance: 0.00,
+          totalSales: 0.00,
+          role: "manager"
+        },
+        {
+          id: "MGR-1002",
+          name: "Gerente Norte",
+          email: "norte@clipzfit.com",
+          password: "password123",
+          totalCommissionPercentage: 25,
+          commissionBalance: 0.00,
+          totalSales: 0.00,
+          role: "manager"
+        }
+      ];
+      for (const mgr of initialManagers) {
+        await db.collection('managers').doc(mgr.id).set(mgr);
+      }
+      
+      // Auto-assign existing seeded affiliates
+      const affiliatesSnap = await db.collection('affiliates').get();
+      for (const doc of affiliatesSnap.docs) {
+        const aff = doc.data();
+        if (!aff.managerId) {
+          let managerId = null;
+          if (aff.id === 'AFF-1001') managerId = 'MGR-1001';
+          else if (aff.id === 'AFF-1002') managerId = 'MGR-1002';
+          else if (aff.id === 'AFF-1003') managerId = 'MGR-1001';
+          
+          if (managerId) {
+            await doc.ref.update({ managerId });
+          }
+        }
+      }
+      console.log("Managers seeded and associated successfully!");
+    }
   } catch (err) {
     console.error("Error seeding database:", err);
   }
@@ -452,7 +500,7 @@ app.get('/api/affiliates', async (req, res) => {
 
 // 3. POST /api/affiliates
 app.post('/api/affiliates', async (req, res) => {
-  const { name, location, commissionRate, status, email, password } = req.body;
+  const { name, location, commissionRate, status, email, password, managerId } = req.body;
 
   if (!name || !location || commissionRate === undefined || !email || !password) {
     return res.status(400).json({ error: "Campos obrigatórios faltando: nome, localidade, comissão, e-mail e senha." });
@@ -462,7 +510,8 @@ app.post('/api/affiliates', async (req, res) => {
 
   try {
     const snapshot = await db.collection('affiliates').where('email', '==', emailLower).get();
-    if (!snapshot.empty || emailLower === 'admin@clipzfit.com') {
+    const mgrSnapshot = await db.collection('managers').where('email', '==', emailLower).get();
+    if (!snapshot.empty || !mgrSnapshot.empty || emailLower === 'admin@clipzfit.com') {
       return res.status(400).json({ error: "Este e-mail de acesso já está cadastrado no sistema." });
     }
 
@@ -476,7 +525,8 @@ app.post('/api/affiliates', async (req, res) => {
       commissionBalance: 0.00,
       status: status || "Active",
       email: emailLower,
-      password: password
+      password: password,
+      managerId: managerId || null
     };
 
     await db.collection('affiliates').doc(newAffiliateId).set(newAffiliate);
@@ -503,7 +553,7 @@ app.post('/api/affiliates', async (req, res) => {
 // PUT /api/affiliates/:id
 app.put('/api/affiliates/:id', async (req, res) => {
   const affiliateId = req.params.id;
-  const { name, location, commissionRate, status, email, password } = req.body;
+  const { name, location, commissionRate, status, email, password, managerId } = req.body;
 
   if (!name || !location || commissionRate === undefined || !email || !password) {
     return res.status(400).json({ error: "Campos obrigatórios faltando: nome, localidade, comissão, e-mail e senha." });
@@ -518,6 +568,7 @@ app.put('/api/affiliates/:id', async (req, res) => {
     }
 
     const snapshot = await db.collection('affiliates').where('email', '==', emailLower).get();
+    const mgrSnapshot = await db.collection('managers').where('email', '==', emailLower).get();
     let isDuplicate = false;
     snapshot.forEach(doc => {
       if (doc.id !== affiliateId) {
@@ -525,8 +576,8 @@ app.put('/api/affiliates/:id', async (req, res) => {
       }
     });
 
-    if (isDuplicate || emailLower === 'admin@clipzfit.com') {
-      return res.status(400).json({ error: "Este e-mail de acesso já está cadastrado em outro parceiro." });
+    if (isDuplicate || !mgrSnapshot.empty || emailLower === 'admin@clipzfit.com') {
+      return res.status(400).json({ error: "Este e-mail de acesso já está cadastrado no sistema." });
     }
 
     const updatedData = {
@@ -536,11 +587,172 @@ app.put('/api/affiliates/:id', async (req, res) => {
       commissionRate: Number(commissionRate),
       status,
       email: emailLower,
-      password
+      password,
+      managerId: managerId || null
     };
 
     await db.collection('affiliates').doc(affiliateId).set(updatedData);
     res.json(updatedData);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/managers
+app.get('/api/managers', async (req, res) => {
+  try {
+    const snapshot = await db.collection('managers').get();
+    const list = [];
+    snapshot.forEach(doc => {
+      list.push(doc.data());
+    });
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/managers
+app.post('/api/managers', async (req, res) => {
+  const { name, email, password, totalCommissionPercentage } = req.body;
+
+  if (!name || !email || !password || totalCommissionPercentage === undefined) {
+    return res.status(400).json({ error: "Campos obrigatórios faltando: nome, e-mail, senha e comissão total." });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+
+  try {
+    const affSnap = await db.collection('affiliates').where('email', '==', emailLower).get();
+    const mgrSnap = await db.collection('managers').where('email', '==', emailLower).get();
+    if (!affSnap.empty || !mgrSnap.empty || emailLower === 'admin@clipzfit.com') {
+      return res.status(400).json({ error: "Este e-mail de acesso já está cadastrado no sistema." });
+    }
+
+    const newManagerId = `MGR-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newManager = {
+      id: newManagerId,
+      name,
+      email: emailLower,
+      password,
+      totalCommissionPercentage: Number(totalCommissionPercentage),
+      commissionBalance: 0.00,
+      totalSales: 0.00,
+      role: "manager"
+    };
+
+    await db.collection('managers').doc(newManagerId).set(newManager);
+    res.status(201).json(newManager);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/managers/:id
+app.put('/api/managers/:id', async (req, res) => {
+  const managerId = req.params.id;
+  const { name, email, password, totalCommissionPercentage } = req.body;
+
+  if (!name || !email || !password || totalCommissionPercentage === undefined) {
+    return res.status(400).json({ error: "Campos obrigatórios faltando: nome, e-mail, senha e comissão total." });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+
+  try {
+    const mgrDoc = await db.collection('managers').doc(managerId).get();
+    if (!mgrDoc.exists) {
+      return res.status(404).json({ error: "Gerente não encontrado." });
+    }
+
+    const affSnap = await db.collection('affiliates').where('email', '==', emailLower).get();
+    const mgrSnap = await db.collection('managers').where('email', '==', emailLower).get();
+    let isDuplicate = false;
+    mgrSnap.forEach(doc => {
+      if (doc.id !== managerId) {
+        isDuplicate = true;
+      }
+    });
+
+    if (!affSnap.empty || isDuplicate || emailLower === 'admin@clipzfit.com') {
+      return res.status(400).json({ error: "Este e-mail de acesso já está cadastrado no sistema." });
+    }
+
+    const updatedData = {
+      ...mgrDoc.data(),
+      name,
+      email: emailLower,
+      password,
+      totalCommissionPercentage: Number(totalCommissionPercentage)
+    };
+
+    await db.collection('managers').doc(managerId).set(updatedData);
+    res.json(updatedData);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/managers/:id
+app.delete('/api/managers/:id', async (req, res) => {
+  const managerId = req.params.id;
+
+  try {
+    const mgrDoc = await db.collection('managers').doc(managerId).get();
+    if (!mgrDoc.exists) {
+      return res.status(404).json({ error: "Gerente não encontrado." });
+    }
+
+    const batch = db.batch();
+    batch.delete(db.collection('managers').doc(managerId));
+
+    const affiliatesSnap = await db.collection('affiliates').where('managerId', '==', managerId).get();
+    affiliatesSnap.forEach(doc => {
+      batch.update(doc.ref, { managerId: null });
+    });
+
+    await batch.commit();
+    res.json({ success: true, message: "Gerente excluído com sucesso e filiais desassociadas." });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/managers/stores/:affiliateId/commission
+app.put('/api/managers/stores/:affiliateId/commission', async (req, res) => {
+  const affiliateId = req.params.affiliateId;
+  const { commissionRate, managerId } = req.body;
+
+  if (commissionRate === undefined || !managerId) {
+    return res.status(400).json({ error: "Campos comissão da loja e ID do gerente são obrigatórios." });
+  }
+
+  try {
+    const affRef = db.collection('affiliates').doc(affiliateId);
+    const affDoc = await affRef.get();
+    if (!affDoc.exists) {
+      return res.status(404).json({ error: "Loja não encontrada." });
+    }
+
+    const affiliate = affDoc.data();
+    if (affiliate.managerId !== managerId) {
+      return res.status(403).json({ error: "Você não tem permissão para gerenciar esta loja." });
+    }
+
+    const mgrDoc = await db.collection('managers').doc(managerId).get();
+    if (!mgrDoc.exists) {
+      return res.status(404).json({ error: "Gerente não encontrado." });
+    }
+
+    const manager = mgrDoc.data();
+    const newRate = Number(commissionRate);
+
+    if (newRate >= manager.totalCommissionPercentage) {
+      return res.status(400).json({ error: `A comissão da loja (${newRate}%) não pode ser maior ou igual à comissão total do gerente (${manager.totalCommissionPercentage}%).` });
+    }
+
+    await affRef.update({ commissionRate: newRate });
+    res.json({ success: true, commissionRate: newRate });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -611,6 +823,26 @@ app.post('/api/login', async (req, res) => {
   }
 
   try {
+    // 1. Check managers
+    const mgrSnapshot = await db.collection('managers')
+      .where('email', '==', emailLower)
+      .where('password', '==', password)
+      .limit(1)
+      .get();
+
+    if (!mgrSnapshot.empty) {
+      const manager = mgrSnapshot.docs[0].data();
+      return res.json({
+        success: true,
+        role: 'manager',
+        managerId: manager.id,
+        managerName: manager.name,
+        email: manager.email,
+        totalCommissionPercentage: manager.totalCommissionPercentage
+      });
+    }
+
+    // 2. Check affiliates
     const snapshot = await db.collection('affiliates')
       .where('email', '==', emailLower)
       .where('password', '==', password)
@@ -624,7 +856,7 @@ app.post('/api/login', async (req, res) => {
       }
       return res.json({
         success: true,
-        role: 'lojista',
+        role: 'vendor',
         affiliateId: affiliate.id,
         affiliateName: affiliate.name,
         email: affiliate.email
@@ -678,7 +910,23 @@ app.post('/api/sales', async (req, res) => {
 
     const tax = 0;
     const total = subtotal;
-    const commission = subtotal * (affiliate.commissionRate / 100);
+
+    let storeCommissionRate = affiliate.commissionRate || 0;
+    let managerCommissionRate = 0;
+    let totalCommissionRate = storeCommissionRate;
+    let managerCommission = 0;
+    let storeCommission = subtotal * (storeCommissionRate / 100);
+
+    // Split commission if manager is linked
+    if (affiliate.managerId) {
+      const mgrDoc = await db.collection('managers').doc(affiliate.managerId).get();
+      if (mgrDoc.exists) {
+        const manager = mgrDoc.data();
+        totalCommissionRate = manager.totalCommissionPercentage || 0;
+        managerCommissionRate = Math.max(0, totalCommissionRate - storeCommissionRate);
+        managerCommission = subtotal * (managerCommissionRate / 100);
+      }
+    }
 
     const txId = `TRX-${Math.floor(1000 + Math.random() * 9000)}`;
     const transaction = {
@@ -688,7 +936,12 @@ app.post('/api/sales', async (req, res) => {
       amount: Number(subtotal.toFixed(2)),
       tax: 0.00,
       total: Number(total.toFixed(2)),
-      commission: Number(commission.toFixed(2)),
+      commission: Number(storeCommission.toFixed(2)),
+      managerCommission: Number(managerCommission.toFixed(2)),
+      managerId: affiliate.managerId || null,
+      storeCommissionRate,
+      managerCommissionRate,
+      totalCommissionRate,
       date: new Date().toISOString(),
       paymentMethod,
       customerCpf,
@@ -704,6 +957,18 @@ app.post('/api/sales', async (req, res) => {
       totalSales: admin.firestore.FieldValue.increment(transaction.amount),
       commissionBalance: admin.firestore.FieldValue.increment(transaction.commission)
     });
+
+    // Update manager metrics if manager is linked
+    if (affiliate.managerId) {
+      const mgrRef = db.collection('managers').doc(affiliate.managerId);
+      const mgrDoc = await mgrRef.get();
+      if (mgrDoc.exists) {
+        await mgrRef.update({
+          commissionBalance: admin.firestore.FieldValue.increment(transaction.managerCommission),
+          totalSales: admin.firestore.FieldValue.increment(transaction.amount)
+        });
+      }
+    }
 
     const updatedAff = (await affRef.get()).data();
 
@@ -755,7 +1020,19 @@ app.delete('/api/sales/:id', async (req, res) => {
       });
     }
 
-    // 3. Excluir o documento da transação
+    // 3. Reverter métricas do gerente se houver
+    if (transaction.managerId && transaction.managerCommission) {
+      const mgrRef = db.collection('managers').doc(transaction.managerId);
+      const mgrDoc = await mgrRef.get();
+      if (mgrDoc.exists) {
+        await mgrRef.update({
+          totalSales: admin.firestore.FieldValue.increment(-Number(amount)),
+          commissionBalance: admin.firestore.FieldValue.increment(-Number(transaction.managerCommission))
+        });
+      }
+    }
+
+    // 4. Excluir o documento da transação
     await txRef.delete();
 
     res.json({ success: true, message: "Venda excluída e estoque/métricas ajustados com sucesso." });
@@ -1379,8 +1656,27 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
         });
       }
 
-      // 3. Salvar transação oficial
-      const commissionAmount = pendingSale.amount * (pendingSale.commissionRate / 100);
+      // 3. Obter dados atuais do lojista para split de comissão
+      const affRef = db.collection('affiliates').doc(pendingSale.affiliateId);
+      const affDoc = await affRef.get();
+      const affiliate = affDoc.exists ? affDoc.data() : { commissionRate: pendingSale.commissionRate };
+      
+      let storeCommissionRate = affiliate.commissionRate || pendingSale.commissionRate || 0;
+      let managerCommissionRate = 0;
+      let totalCommissionRate = storeCommissionRate;
+      let managerCommission = 0;
+      let storeCommission = pendingSale.amount * (storeCommissionRate / 100);
+
+      if (affiliate.managerId) {
+        const mgrDoc = await db.collection('managers').doc(affiliate.managerId).get();
+        if (mgrDoc.exists) {
+          const manager = mgrDoc.data();
+          totalCommissionRate = manager.totalCommissionPercentage || 0;
+          managerCommissionRate = Math.max(0, totalCommissionRate - storeCommissionRate);
+          managerCommission = pendingSale.amount * (managerCommissionRate / 100);
+        }
+      }
+
       const txId = `TRX-${Math.floor(100000 + Math.random() * 900000)}`;
       const transaction = {
         id: txId,
@@ -1389,7 +1685,12 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
         amount: pendingSale.amount,
         tax: 0.00,
         total: pendingSale.amount,
-        commission: Number(commissionAmount.toFixed(2)),
+        commission: Number(storeCommission.toFixed(2)),
+        managerCommission: Number(managerCommission.toFixed(2)),
+        managerId: affiliate.managerId || null,
+        storeCommissionRate,
+        managerCommissionRate,
+        totalCommissionRate,
         date: new Date().toISOString(),
         paymentMethod: "Mercado Pago",
         customerCpf: pendingSale.customerCpf,
@@ -1400,11 +1701,22 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
       await db.collection('transactions').doc(txId).set(transaction);
 
       // 4. Atualizar métricas acumuladas do lojista
-      const affRef = db.collection('affiliates').doc(pendingSale.affiliateId);
       await affRef.update({
         totalSales: admin.firestore.FieldValue.increment(transaction.amount),
         commissionBalance: admin.firestore.FieldValue.increment(transaction.commission)
       });
+
+      // 5. Atualizar métricas do gerente se houver
+      if (affiliate.managerId) {
+        const mgrRef = db.collection('managers').doc(affiliate.managerId);
+        const mgrDoc = await mgrRef.get();
+        if (mgrDoc.exists) {
+          await mgrRef.update({
+            commissionBalance: admin.firestore.FieldValue.increment(transaction.managerCommission),
+            totalSales: admin.firestore.FieldValue.increment(transaction.amount)
+          });
+        }
+      }
 
       // 5. Atualizar venda pendente para Aprovada
       await pendingRef.update({
