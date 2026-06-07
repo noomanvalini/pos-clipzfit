@@ -50,8 +50,12 @@ function AppContent() {
 
   // Fetch notifications
   const fetchNotifications = async () => {
+    if (!user) return;
     try {
-      const res = await fetch(`${API_BASE}/notifications`);
+      const query = user.role === 'admin' 
+        ? '?role=admin' 
+        : `?role=lojista&affiliateId=${activeAffiliateId}`;
+      const res = await fetch(`${API_BASE}/notifications${query}`);
       if (res.ok) {
         const data = await res.json();
         setNotifications(data);
@@ -128,8 +132,17 @@ function AppContent() {
   };
 
   const handleReadAllNotifications = async () => {
+    if (!user) return;
     try {
-      const res = await fetch(`${API_BASE}/notifications/read-all`, { method: 'POST' });
+      const body = { role: user.role };
+      if (body.role === 'lojista') {
+        body.affiliateId = activeAffiliateId;
+      }
+      const res = await fetch(`${API_BASE}/notifications/read-all`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
       if (res.ok) {
         fetchNotifications();
       }
@@ -139,8 +152,17 @@ function AppContent() {
   };
 
   const handleClearNotifications = async () => {
+    if (!user) return;
     try {
-      const res = await fetch(`${API_BASE}/notifications/clear`, { method: 'POST' });
+      const body = { role: user.role };
+      if (body.role === 'lojista') {
+        body.affiliateId = activeAffiliateId;
+      }
+      const res = await fetch(`${API_BASE}/notifications/clear`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
       if (res.ok) {
         fetchNotifications();
       }

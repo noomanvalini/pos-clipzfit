@@ -16,6 +16,46 @@ export default function AdminDashboard({ activeAffiliateId, refreshTrigger }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
+  const exportPartnersToCSV = () => {
+    if (!affiliates.length) return;
+    
+    const headers = [
+      "Codigo ID", 
+      "Nome da Filial", 
+      "Localidade", 
+      "E-mail", 
+      "Comissao (%)", 
+      "Vendas Totais (R$)", 
+      "Saldo Pendente (R$)",
+      "Status"
+    ];
+    
+    const rows = affiliates.map(aff => [
+      aff.id,
+      aff.name,
+      aff.location,
+      aff.email || "",
+      aff.commissionRate,
+      aff.totalSales.toFixed(2),
+      aff.commissionBalance.toFixed(2),
+      aff.status
+    ]);
+    
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(r => r.join(","))
+    ].join("\n");
+    
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `relatorio_parceiros_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleOpenCreateModal = () => {
     setSelectedAffiliate(null);
     setName('');
@@ -154,13 +194,24 @@ export default function AdminDashboard({ activeAffiliateId, refreshTrigger }) {
             <h1 className="font-sans text-2xl font-bold text-[#f0f6fc]">Gestão de Parceiros</h1>
             <p className="font-sans text-xs text-[#8b949e] mt-1">Gerencie pontos de venda ativos e taxas contratuais de comissão.</p>
           </div>
-          <button 
-            onClick={handleOpenCreateModal}
-            className="bg-primary text-[#0d1117] px-5 py-2.5 rounded-lg font-mono text-xs font-bold hover:opacity-95 transition-opacity flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 shadow-md shadow-primary/10"
-          >
-            <span className="material-symbols-outlined text-[18px] font-bold">add</span>
-            Novo Parceiro
-          </button>
+          <div className="flex gap-2">
+            {affiliates.length > 0 && (
+              <button
+                onClick={exportPartnersToCSV}
+                className="bg-transparent hover:bg-primary/10 text-primary border border-primary/30 hover:border-primary px-5 py-2.5 rounded-lg font-mono text-xs font-bold hover:opacity-95 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
+              >
+                <span className="material-symbols-outlined text-[18px]">download</span>
+                Exportar CSV
+              </button>
+            )}
+            <button 
+              onClick={handleOpenCreateModal}
+              className="bg-primary text-[#0d1117] px-5 py-2.5 rounded-lg font-mono text-xs font-bold hover:opacity-95 transition-opacity flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 shadow-md shadow-primary/10"
+            >
+              <span className="material-symbols-outlined text-[18px] font-bold">add</span>
+              Novo Parceiro
+            </button>
+          </div>
         </div>
 
         {/* Tabular Layout of Locations */}

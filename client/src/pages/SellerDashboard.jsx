@@ -7,6 +7,59 @@ export default function SellerDashboard({ activeAffiliateId, refreshTrigger }) {
   const [loading, setLoading] = useState(true);
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
   const [lastWithdrawAmount, setLastWithdrawAmount] = useState(0);
+  const [expandedTxIds, setExpandedTxIds] = useState({});
+
+  const toggleExpandTx = (txId) => {
+    setExpandedTxIds(prev => ({
+      ...prev,
+      [txId]: !prev[txId]
+    }));
+  };
+
+  const exportTransactionsToCSV = () => {
+    if (!metrics || !metrics.transactions || !metrics.transactions.length) return;
+    
+    const headers = [
+      "ID Transacao", 
+      "Data", 
+      "Metodo Pagamento", 
+      "CPF Cliente", 
+      "Email Cliente", 
+      "Faturamento (R$)", 
+      "Comissao (R$)",
+      "Itens Vendidos"
+    ];
+    
+    const rows = metrics.transactions.map(tx => {
+      const itemsString = tx.items 
+        ? tx.items.map(item => `${item.name} (x${item.quantity})`).join(" | ")
+        : "";
+      return [
+        tx.id,
+        new Date(tx.date).toLocaleString('pt-BR'),
+        tx.paymentMethod === 'Cash' ? 'Dinheiro' : tx.paymentMethod === 'Card' ? 'Cartao' : 'Dividido',
+        tx.customerCpf || "",
+        tx.customerEmail || "",
+        tx.amount.toFixed(2),
+        tx.commission.toFixed(2),
+        `"${itemsString.replace(/"/g, '""')}"`
+      ];
+    });
+    
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(r => r.join(","))
+    ].join("\n");
+    
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `relatorio_vendas_${metrics.name.toLowerCase().replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const fetchMetrics = async () => {
     try {
@@ -189,7 +242,18 @@ export default function SellerDashboard({ activeAffiliateId, refreshTrigger }) {
 
         {/* Recent Transactions List */}
         <div className="mt-6 premium-card p-6">
-          <h3 className="font-mono text-xs text-[#8b949e] uppercase mb-4 font-bold tracking-wider">Histórico de Transações Recentes</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-mono text-xs text-[#8b949e] uppercase font-bold tracking-wider">Histórico de Transações Recentes</h3>
+            {metrics.transactions.length > 0 && (
+              <button
+                onClick={exportTransactionsToCSV}
+                className="bg-transparent hover:bg-primary/10 text-primary border border-primary/30 hover:border-primary font-mono text-[11px] font-bold py-1.5 px-3 rounded transition-all duration-300 active:scale-95 flex items-center gap-1 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[16px]">download</span>
+                Exportar CSV
+              </button>
+            )}
+          </div>
           
           {metrics.transactions.length === 0 ? (
             <div className="text-center py-12 text-[#8b949e] font-mono text-xs uppercase tracking-wider">
@@ -200,41 +264,68 @@ export default function SellerDashboard({ activeAffiliateId, refreshTrigger }) {
               {metrics.transactions.map((tx) => (
                 <div 
                    key={tx.id}
-                   className="flex justify-between items-center py-3 border-b border-[#21262d] hover:bg-[#161b22] transition-colors px-4 rounded-lg"
+                   className="flex flex-col border-b border-[#21262d] hover:bg-[#161b22]/40 transition-colors px-4 py-3 rounded-lg"
                 >
-                  <div className="flex flex-col gap-1.5 min-w-0 pr-4 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm text-[#f0f6fc] font-bold tracking-wider">{tx.id}</span>
-                      <span className="bg-[#21262d] text-[#8b949e] text-[10px] font-mono px-2 py-[1.5px] rounded uppercase tracking-wider">
-                        {tx.paymentMethod === 'Cash' ? 'Dinheiro' : tx.paymentMethod === 'Card' ? 'Cartão' : 'Dividido'}
-                      </span>
-                    </div>
-                    {tx.customerCpf && (
-                      <div className="text-[11px] font-mono text-[#8b949e] flex flex-wrap gap-2">
-                        <span>CPF: {tx.customerCpf}</span>
-                        {tx.customerEmail && <span className="text-[#30363d]">|</span>}
-                        {tx.customerEmail && <span className="truncate">Email: {tx.customerEmail}</span>}
+                  <div className="flex justify-between items-center w-full">
+                    <div className="flex flex-col gap-1 min-w-0 pr-4 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm text-[#f0f6fc] font-bold tracking-wider">{tx.id}</span>
+                        <span className="bg-[#21262d] text-[#8b949e] text-[10px] font-mono px-2 py-[1.5px] rounded uppercase tracking-wider">
+                          {tx.paymentMethod === 'Cash' ? 'Dinheiro' : tx.paymentMethod === 'Card' ? 'Cartão' : 'Dividido'}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                  <span className="font-mono text-xs text-[#8b949e] whitespace-nowrap px-4">{formatDate(tx.date)}</span>
-                  <div className="flex items-center gap-4 shrink-0 pl-2">
-                    <div className="flex flex-col items-end">
-                      <span className="font-mono text-sm text-primary font-bold">
-                        +R$ {tx.amount.toFixed(2)}
-                      </span>
-                      <span className="text-[10px] text-[#8b949e] font-mono">
-                        Comissão: +R$ {tx.commission.toFixed(2)}
-                      </span>
+                      {tx.customerCpf && (
+                        <div className="text-[11px] font-mono text-[#8b949e] flex flex-wrap gap-2">
+                          <span>CPF: {tx.customerCpf}</span>
+                          {tx.customerEmail && <span className="text-[#30363d]">|</span>}
+                          {tx.customerEmail && <span className="truncate">Email: {tx.customerEmail}</span>}
+                        </div>
+                      )}
+                      <button 
+                        onClick={() => toggleExpandTx(tx.id)}
+                        className="text-primary hover:underline text-[11px] font-mono font-bold flex items-center gap-0.5 cursor-pointer mt-1 self-start"
+                      >
+                        {expandedTxIds[tx.id] ? '- detalhes' : '+ detalhes'}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleDeleteSale(tx.id)}
-                      className="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-1.5 rounded transition-colors flex items-center justify-center cursor-pointer"
-                      title="Excluir Venda"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">delete</span>
-                    </button>
+                    <span className="font-mono text-xs text-[#8b949e] whitespace-nowrap px-4">{formatDate(tx.date)}</span>
+                    <div className="flex items-center gap-4 shrink-0 pl-2">
+                      <div className="flex flex-col items-end">
+                        <span className="font-mono text-sm text-primary font-bold">
+                          +R$ {tx.amount.toFixed(2)}
+                        </span>
+                        <span className="text-[10px] text-[#8b949e] font-mono">
+                          Comissão: +R$ {tx.commission.toFixed(2)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteSale(tx.id)}
+                        className="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-1.5 rounded transition-colors flex items-center justify-center cursor-pointer"
+                        title="Excluir Venda"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Expanded Items details */}
+                  {expandedTxIds[tx.id] && tx.items && tx.items.length > 0 && (
+                    <div className="mt-3 bg-[#0d1117]/80 border border-[#30363d] rounded-lg p-4 space-y-2 animate-fade-in w-full">
+                      <div className="text-[10px] font-mono text-[#8b949e] uppercase tracking-wider font-bold mb-1">Itens do Pedido</div>
+                      <div className="divide-y divide-[#21262d] text-xs font-mono">
+                        {tx.items.map((item, idx) => (
+                          <div key={idx} className="py-2 flex justify-between text-[#c9d1d9]">
+                            <span className="font-sans text-[#f0f6fc]">
+                              {item.name} <span className="text-primary font-mono font-bold text-[10px]">x{item.quantity}</span>
+                            </span>
+                            <span className="font-mono text-[#8b949e]">
+                              R$ {item.price ? `${item.price.toFixed(2)} / un = R$ ${(item.price * item.quantity).toFixed(2)}` : `${(tx.amount/item.quantity).toFixed(2)} / un = R$ ${tx.amount.toFixed(2)}`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

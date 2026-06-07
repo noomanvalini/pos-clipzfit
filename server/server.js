@@ -138,7 +138,8 @@ const initialData = {
       title: "Notificação Inicial",
       message: "Bem-vindo ao sistema de controle de vendas e estoque do ClipzFIT.",
       date: new Date().toISOString(),
-      read: false
+      read: false,
+      recipientRole: "admin"
     }
   ]
 };
@@ -802,7 +803,8 @@ app.post('/api/affiliates/:id/withdraw', async (req, res) => {
       title: "Saque de Comissão",
       message: `Filial ${affiliate.name} solicitou saque de comissão no valor de R$ ${amountToWithdraw.toFixed(2)}.`,
       date: new Date().toISOString(),
-      read: false
+      read: false,
+      recipientRole: "admin"
     });
 
     const updatedAff = (await affRef.get()).data();
@@ -1030,7 +1032,8 @@ app.post('/api/stocks/request', async (req, res) => {
       title: "Reposição Solicitada",
       message: `Filial ${affiliate.name} solicitou reposição de ${quantity} un de ${product.name}.`,
       date: new Date().toISOString(),
-      read: false
+      read: false,
+      recipientRole: "admin"
     });
 
     res.status(201).json(newRequest);
@@ -1092,6 +1095,18 @@ app.post('/api/stocks/requests/:id/approve', async (req, res) => {
       status: "Aprovado"
     });
 
+    // Create notification for the lojista
+    const notifId = `NT-${Math.floor(1000 + Math.random() * 9000)}`;
+    await db.collection('notifications').doc(notifId).set({
+      id: notifId,
+      title: "Reposição Aprovada",
+      message: `Sua solicitação de reposição para ${request.quantity} un de ${product.productName || product.name} foi aprovada. Estoque local atualizado!`,
+      date: new Date().toISOString(),
+      read: false,
+      recipientRole: "lojista",
+      affiliateId: request.affiliateId
+    });
+
     res.json({ success: true, request: { ...request, status: "Aprovado" }, newStock: newQty });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1100,11 +1115,21 @@ app.post('/api/stocks/requests/:id/approve', async (req, res) => {
 
 // 13. GET /api/notifications
 app.get('/api/notifications', async (req, res) => {
+  const { role, affiliateId } = req.query;
   try {
-    const snapshot = await db.collection('notifications').get();
+    let query = db.collection('notifications');
+    if (role) {
+      query = query.where('recipientRole', '==', role);
+    }
+    const snapshot = await query.get();
     const list = [];
     snapshot.forEach(doc => {
-      list.push(doc.data());
+      const data = doc.data();
+      // If role is lojista, filter by their specific affiliateId if it has one
+      if (role === 'lojista' && data.affiliateId && data.affiliateId !== affiliateId) {
+        return;
+      }
+      list.push(data);
     });
 
     list.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -1117,10 +1142,19 @@ app.get('/api/notifications', async (req, res) => {
 
 // 14. POST /api/notifications/read-all
 app.post('/api/notifications/read-all', async (req, res) => {
+  const { role, affiliateId } = req.body;
   try {
-    const snapshot = await db.collection('notifications').where('read', '==', false).get();
+    let query = db.collection('notifications').where('read', '==', false);
+    if (role) {
+      query = query.where('recipientRole', '==', role);
+    }
+    const snapshot = await query.get();
     const batch = db.batch();
     snapshot.forEach(doc => {
+      const data = doc.data();
+      if (role === 'lojista' && data.affiliateId && data.affiliateId !== affiliateId) {
+        return;
+      }
       batch.update(doc.ref, { read: true });
     });
     await batch.commit();
@@ -1132,10 +1166,19 @@ app.post('/api/notifications/read-all', async (req, res) => {
 
 // 15. POST /api/notifications/clear
 app.post('/api/notifications/clear', async (req, res) => {
+  const { role, affiliateId } = req.body;
   try {
-    const snapshot = await db.collection('notifications').get();
+    let query = db.collection('notifications');
+    if (role) {
+      query = query.where('recipientRole', '==', role);
+    }
+    const snapshot = await query.get();
     const batch = db.batch();
     snapshot.forEach(doc => {
+      const data = doc.data();
+      if (role === 'lojista' && data.affiliateId && data.affiliateId !== affiliateId) {
+        return;
+      }
       batch.delete(doc.ref);
     });
     await batch.commit();
