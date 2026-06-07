@@ -424,7 +424,7 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
       </section>
 
       {/* Shopping Cart Sidebar */}
-      <aside className={`w-full md:w-80 bg-[#161b22] border-l border-[#30363d] h-full flex-col z-30 shadow-2xl relative ${activeMobileTab === 'cart' ? 'flex' : 'hidden md:flex'}`}>
+      <aside className={`w-full md:w-80 bg-[#161b22] border-l border-[#30363d] flex-1 md:flex-initial min-h-0 md:h-full flex-col z-30 shadow-2xl relative ${activeMobileTab === 'cart' ? 'flex' : 'hidden md:flex'}`}>
         <div className="p-5 border-b border-[#30363d] flex justify-between items-center bg-[#161b22]/50">
           <div>
             <h2 className="font-sans text-lg font-bold text-[#f0f6fc]">Carrinho</h2>

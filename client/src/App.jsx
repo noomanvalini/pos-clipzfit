@@ -193,7 +193,7 @@ function AppContent() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0d1117] text-[#c9d1d9] font-sans select-none relative">
+    <div className="flex h-dvh overflow-hidden bg-[#0d1117] text-[#c9d1d9] font-sans select-none relative">
       
       {/* Mobile Sidebar backdrop */}
       {isMobileMenuOpen && (
@@ -204,7 +204,7 @@ function AppContent() {
       )}
 
       {/* Sidebar Navigation */}
-      <nav className={`bg-[#161b22] border-r border-[#30363d] h-screen w-64 fixed top-0 flex flex-col p-6 z-50 transition-all duration-300 ${isMobileMenuOpen ? 'left-0' : '-left-full'} md:left-0`}>
+      <nav className={`bg-[#161b22] border-r border-[#30363d] h-dvh w-64 fixed top-0 flex flex-col p-6 z-50 transition-all duration-300 ${isMobileMenuOpen ? 'left-0' : '-left-full'} md:left-0`}>
         <div className="mb-8 flex flex-col items-center">
           <img 
             alt="ClipzFIT Logo" 
@@ -317,7 +317,7 @@ function AppContent() {
       {/* Main Content Area */}
       <div className="flex-1 ml-0 md:ml-64 flex flex-col min-w-0 h-full relative">
         {/* TopNavBar */}
-        <header className="fixed top-0 right-0 w-full md:w-[calc(100%-16rem)] z-30 bg-[#0d1117] border-b border-[#30363d] flex justify-between items-center h-16 px-6">
+        <header className="w-full z-30 bg-[#0d1117] border-b border-[#30363d] flex justify-between items-center h-16 px-6 shrink-0">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -457,7 +457,7 @@ function AppContent() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 mt-16 overflow-y-auto bg-[#0d1117]">
+        <main className="flex-1 overflow-y-auto bg-[#0d1117]">
           <Routes>
             <Route path="/dashboard" element={<SellerDashboard activeAffiliateId={activeAffiliateId} refreshTrigger={triggerGlobalRefresh} />} />
             <Route 
