@@ -421,7 +421,7 @@ export default function EstoqueAdmin({ refreshTrigger }) {
                 // Calculate stock status alerts for this affiliate
                 const affStocks = stocks.filter(s => s.affiliateId === aff.id);
                 const outOfStockCount = affStocks.filter(s => s.quantity === 0).length;
-                const criticalStockCount = affStocks.filter(s => s.quantity > 0 && s.quantity < 5).length;
+                const criticalStockCount = affStocks.filter(s => s.quantity > 0 && s.quantity <= 2).length;
                 const totalItems = affStocks.length;
 
                 return (
@@ -612,7 +612,7 @@ export default function EstoqueAdmin({ refreshTrigger }) {
                           <tbody>
                             {filteredStocks.map((item, index) => {
                               const isOutOfStock = item.quantity === 0;
-                              const isCritical = item.quantity > 0 && item.quantity < 5;
+                              const isCritical = item.quantity > 0 && item.quantity <= 2;
 
                               return (
                                 <tr 

@@ -113,7 +113,7 @@ export default function EstoqueLojista({ activeAffiliateId }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {stocks.map((item) => {
             const isOutOfStock = item.quantity === 0;
-            const isCritical = item.quantity > 0 && item.quantity < 5;
+            const isCritical = item.quantity > 0 && item.quantity <= 2;
 
             return (
               <div 
