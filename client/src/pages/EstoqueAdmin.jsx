@@ -26,6 +26,11 @@ export default function EstoqueAdmin({ refreshTrigger }) {
   const [prodPromoPrice, setProdPromoPrice] = useState('');
   const [prodImage, setProdImage] = useState('');
 
+  // Bulk stock edit states
+  const [isBulkEditing, setIsBulkEditing] = useState(false);
+  const [bulkQuantities, setBulkQuantities] = useState({});
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
+
   const fetchAllData = async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
@@ -224,6 +229,56 @@ export default function EstoqueAdmin({ refreshTrigger }) {
     } catch (err) {
       console.error("Error deleting product:", err);
       alert("Falha na conexão com o servidor.");
+    }
+  };
+
+  const handleBulkSave = async () => {
+    const updates = [];
+    
+    for (const prod of products) {
+      const stockItem = filteredStocks.find(s => s.productId === prod.id);
+      const currentQty = stockItem ? stockItem.quantity : 0;
+      const newQty = bulkQuantities[prod.id] !== undefined ? Number(bulkQuantities[prod.id]) : 0;
+      
+      if (newQty !== currentQty) {
+        updates.push({
+          productId: prod.id,
+          quantity: newQty
+        });
+      }
+    }
+
+    if (updates.length === 0) {
+      setIsBulkEditing(false);
+      return;
+    }
+
+    try {
+      setIsBulkSaving(true);
+      const res = await fetch(`${API_BASE}/stocks/bulk-update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          affiliateId: selectedAffiliateId,
+          updates
+        })
+      });
+
+      if (res.ok) {
+        setIsBulkEditing(false);
+        fetchAllData();
+        refreshTrigger();
+      } else {
+        const errData = await res.json();
+        alert(`Erro ao salvar estoques: ${errData.error}`);
+      }
+    } catch (err) {
+      console.error("Error saving bulk stock:", err);
+      alert("Falha na conexão com o servidor.");
+    } finally {
+      setIsBulkSaving(false);
     }
   };
 
@@ -434,20 +489,110 @@ export default function EstoqueAdmin({ refreshTrigger }) {
                 const selectedAff = affiliates.find(a => a.id === selectedAffiliateId);
                 return (
                   <div className="space-y-4">
-                    <div className="flex justify-between items-end px-1">
+                    <div className="flex justify-between items-center px-1">
                       <div>
                         <h3 className="font-mono text-xs text-[#8b949e] uppercase font-bold tracking-wider">Estoque Atual</h3>
                         <h2 className="font-sans text-lg font-bold text-[#f0f6fc] mt-1">
                           {selectedAff ? selectedAff.name : 'Carregando...'}
                         </h2>
                       </div>
-                      <span className="font-sans text-xs text-[#8b949e]">
-                        {selectedAff ? selectedAff.location : ''}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        {selectedAff && !isBulkEditing && (
+                          <button
+                            onClick={() => {
+                              const initialQuants = {};
+                              products.forEach(prod => {
+                                const stockItem = filteredStocks.find(s => s.productId === prod.id);
+                                initialQuants[prod.id] = stockItem ? stockItem.quantity : 0;
+                              });
+                              setBulkQuantities(initialQuants);
+                              setIsBulkEditing(true);
+                            }}
+                            className="bg-transparent border border-primary/30 hover:border-primary text-primary font-mono text-[11px] font-bold px-3 py-1.5 rounded-lg hover:bg-primary/5 transition-all duration-300 cursor-pointer active:scale-95 flex items-center gap-1 select-none"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">edit_note</span>
+                            Edição Rápida
+                          </button>
+                        )}
+                        <span className="font-sans text-xs text-[#8b949e]">
+                          {selectedAff ? selectedAff.location : ''}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="premium-card p-4 md:p-6 overflow-x-auto">
-                      {filteredStocks.length === 0 ? (
+                      {isBulkEditing ? (
+                        <div className="space-y-4">
+                          <table className="w-full text-left border-collapse min-w-[500px]">
+                            <thead>
+                              <tr className="border-b border-[#21262d]">
+                                <th className="pb-4 pt-2 px-4 uppercase font-mono text-xs text-[#8b949e] tracking-wider font-semibold">Produto</th>
+                                <th className="pb-4 pt-2 px-4 uppercase font-mono text-xs text-[#8b949e] tracking-wider font-semibold text-right pr-12">Qtd Atual</th>
+                                <th className="pb-4 pt-2 px-4 uppercase font-mono text-xs text-[#8b949e] tracking-wider font-semibold text-center w-32">Novo Estoque</th>
+                                <th className="pb-4 pt-2 px-4 uppercase font-mono text-xs text-[#8b949e] tracking-wider font-semibold text-center">Alteração</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {products.map((prod) => {
+                                const stockItem = filteredStocks.find(s => s.productId === prod.id);
+                                const currentQty = stockItem ? stockItem.quantity : 0;
+                                const editQty = bulkQuantities[prod.id] !== undefined ? bulkQuantities[prod.id] : 0;
+                                const diff = editQty === '' ? 0 : Number(editQty) - currentQty;
+
+                                return (
+                                  <tr key={prod.id} className="border-b border-[#21262d] hover:bg-[#161b22] transition-colors">
+                                    <td className="py-4 px-4 font-sans text-sm text-[#f0f6fc]">{prod.name}</td>
+                                    <td className="py-4 px-4 font-mono text-sm text-right font-bold pr-12 text-[#8b949e]">
+                                      {currentQty} un
+                                    </td>
+                                    <td className="py-4 px-4 text-center">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={editQty}
+                                        onChange={(e) => {
+                                          const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0);
+                                          setBulkQuantities(prev => ({
+                                            ...prev,
+                                            [prod.id]: val
+                                          }));
+                                        }}
+                                        className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-1.5 w-20 text-center text-[#f0f6fc] focus:border-primary focus:outline-none font-mono text-xs"
+                                      />
+                                    </td>
+                                    <td className="py-4 px-4 text-center">
+                                      {diff > 0 ? (
+                                        <span className="text-green-500 font-mono text-xs font-bold">+{diff} un (Adicionar)</span>
+                                      ) : diff < 0 ? (
+                                        <span className="text-red-500 font-mono text-xs font-bold">{diff} un (Retirar)</span>
+                                      ) : (
+                                        <span className="text-[#8b949e]/40 font-mono text-xs">-</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                          <div className="flex justify-end gap-3 pt-4 border-t border-[#21262d]">
+                            <button
+                              type="button"
+                              onClick={() => setIsBulkEditing(false)}
+                              className="bg-transparent border border-outline text-[#f0f6fc] font-mono text-xs py-2 px-4 rounded-lg hover:bg-[#161b22] transition-colors cursor-pointer active:scale-95"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleBulkSave}
+                              disabled={isBulkSaving}
+                              className="bg-primary text-[#0d1117] font-mono font-bold text-xs py-2 px-5 rounded-lg hover:bg-primary/90 transition-colors cursor-pointer active:scale-95 shadow-md shadow-primary/5 disabled:opacity-50"
+                            >
+                              {isBulkSaving ? "Salvando..." : "Salvar Tudo"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : filteredStocks.length === 0 ? (
                         <div className="text-center py-12 text-[#8b949e] font-mono text-xs uppercase tracking-wider space-y-2">
                           <div>Nenhum produto em estoque nesta filial.</div>
                           <div className="text-[10px] text-[#8b949e]/60 font-sans normal-case">

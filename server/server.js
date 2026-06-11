@@ -533,10 +533,9 @@ app.post('/api/affiliates', async (req, res) => {
 
     // Initialize stocks for all existing products in catalog
     const productsSnap = await db.collection('products').get();
-    const defaultProducts = ["prod-1", "prod-2", "prod-3"];
     for (const prodDoc of productsSnap.docs) {
       const prodId = prodDoc.id;
-      const initialQty = defaultProducts.includes(prodId) ? 10 : 0;
+      const initialQty = 0;
       await db.collection('stocks').doc(`${newAffiliateId}_${prodId}`).set({
         affiliateId: newAffiliateId,
         productId: prodId,
@@ -1264,6 +1263,105 @@ app.post('/api/stocks/replenish', async (req, res) => {
     }
 
     res.json({ success: true, newQuantity: newQty });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 9.5. POST /api/stocks/bulk-update
+app.post('/api/stocks/bulk-update', async (req, res) => {
+  const { affiliateId, updates } = req.body;
+
+  if (!affiliateId || !updates || !Array.isArray(updates)) {
+    return res.status(400).json({ error: "Faltando parâmetros: affiliateId, updates (array)." });
+  }
+
+  try {
+    const batch = db.batch();
+    const productRefs = updates.map(u => db.collection('products').doc(u.productId));
+    const stockRefs = updates.map(u => db.collection('stocks').doc(`${affiliateId}_${u.productId}`));
+
+    const productDocs = await Promise.all(productRefs.map(ref => ref.get()));
+    const stockDocs = await Promise.all(stockRefs.map(ref => ref.get()));
+
+    const productMap = {};
+    productDocs.forEach(doc => {
+      if (doc.exists) {
+        productMap[doc.id] = { ref: doc.ref, data: doc.data() };
+      }
+    });
+
+    const stockMap = {};
+    stockDocs.forEach(doc => {
+      if (doc.exists) {
+        stockMap[doc.id] = { ref: doc.ref, data: doc.data() };
+      }
+    });
+
+    // Validation
+    for (const update of updates) {
+      const { productId, quantity } = update;
+      const newQty = Number(quantity);
+      if (isNaN(newQty) || newQty < 0) {
+        return res.status(400).json({ error: `Quantidade inválida para o produto ${productId}.` });
+      }
+
+      const productInfo = productMap[productId];
+      if (!productInfo) {
+        return res.status(404).json({ error: `Produto ${productId} não encontrado no CD.` });
+      }
+
+      const stockKey = `${affiliateId}_${productId}`;
+      const existingStock = stockMap[stockKey];
+      const oldQty = existingStock ? Number(existingStock.data.quantity || 0) : 0;
+      const diff = newQty - oldQty;
+
+      if (diff > 0 && productInfo.data.generalStock !== undefined) {
+        const cdStock = productInfo.data.generalStock || 0;
+        if (cdStock < diff) {
+          return res.status(400).json({ 
+            error: `Estoque no CD insuficiente para o produto "${productInfo.data.name}". CD possui ${cdStock} un, mas é necessário adicionar ${diff} un.` 
+          });
+        }
+      }
+    }
+
+    // Execution
+    for (const update of updates) {
+      const { productId, quantity } = update;
+      const newQty = Number(quantity);
+      const productInfo = productMap[productId];
+      const stockKey = `${affiliateId}_${productId}`;
+      const existingStock = stockMap[stockKey];
+      const oldQty = existingStock ? Number(existingStock.data.quantity || 0) : 0;
+      const diff = newQty - oldQty;
+
+      if (diff !== 0) {
+        // Adjust CD generalStock
+        if (productInfo.data.generalStock !== undefined) {
+          batch.update(productInfo.ref, {
+            generalStock: admin.firestore.FieldValue.increment(-diff)
+          });
+        }
+
+        // Adjust Affiliate Stock
+        const stockRef = db.collection('stocks').doc(stockKey);
+        if (existingStock) {
+          batch.update(stockRef, {
+            quantity: newQty
+          });
+        } else {
+          batch.set(stockRef, {
+            affiliateId,
+            productId,
+            quantity: newQty
+          });
+        }
+      }
+    }
+
+    await batch.commit();
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
