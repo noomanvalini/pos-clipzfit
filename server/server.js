@@ -1642,7 +1642,8 @@ app.post('/api/checkout/preference', async (req, res) => {
               failure: `https://${req.get('host')}/checkout/failure`,
               pending: `https://${req.get('host')}/checkout/pending`
             },
-            auto_return: "approved"
+            auto_return: "approved",
+            notification_url: `https://${req.get('host')}/api/webhooks/mercadopago`
           }
         });
 
