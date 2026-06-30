@@ -1826,13 +1826,23 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
 
       console.log(`[Webhook MP] Venda ${pendingSaleId} aprovada e faturada como ${txId}!`);
       return res.status(200).json({ success: true, message: "Pagamento aprovado e processado com sucesso.", transactionId: txId });
-    } else {
+    } else if (paymentStatus === 'rejected') {
       await pendingRef.update({
-        status: paymentStatus === 'rejected' ? 'Rejected' : 'Cancelled',
+        status: 'Rejected',
         updatedAt: new Date().toISOString()
       });
-      console.log(`[Webhook MP] Venda ${pendingSaleId} foi atualizada para status: ${paymentStatus}`);
-      return res.status(200).json({ success: true, message: `Status da venda atualizado para ${paymentStatus}.` });
+      console.log(`[Webhook MP] Venda ${pendingSaleId} foi rejeitada.`);
+      return res.status(200).json({ success: true, message: "Pagamento rejeitado." });
+    } else if (paymentStatus === 'cancelled') {
+      await pendingRef.update({
+        status: 'Cancelled',
+        updatedAt: new Date().toISOString()
+      });
+      console.log(`[Webhook MP] Venda ${pendingSaleId} foi cancelada.`);
+      return res.status(200).json({ success: true, message: "Pagamento cancelado." });
+    } else {
+      console.log(`[Webhook MP] Venda ${pendingSaleId} recebida com status intermediário: ${paymentStatus}. Mantendo como Pending.`);
+      return res.status(200).json({ success: true, message: `Status intermediário: ${paymentStatus}. Venda continua Pending.` });
     }
 
   } catch (err) {
