@@ -37,7 +37,7 @@ export default function SellerDashboard({ activeAffiliateId, refreshTrigger }) {
       return [
         tx.id,
         new Date(tx.date).toLocaleString('pt-BR'),
-        tx.paymentMethod === 'Cash' ? 'Dinheiro' : tx.paymentMethod === 'Card' ? 'Cartao' : 'Dividido',
+        tx.paymentMethod === 'Cash' ? 'Dinheiro' : tx.paymentMethod === 'Card' ? 'Cartao' : (tx.paymentMethod || 'Dividido'),
         tx.customerCpf || "",
         tx.customerEmail || "",
         tx.amount.toFixed(2),
@@ -263,7 +263,7 @@ export default function SellerDashboard({ activeAffiliateId, refreshTrigger }) {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-sm text-[#f0f6fc] font-bold tracking-wider">{tx.id}</span>
                         <span className="bg-[#21262d] text-[#8b949e] text-[10px] font-mono px-2 py-[1.5px] rounded uppercase tracking-wider">
-                          {tx.paymentMethod === 'Cash' ? 'Dinheiro' : tx.paymentMethod === 'Card' ? 'Cartão' : 'Dividido'}
+                          {tx.paymentMethod === 'Cash' ? 'Dinheiro' : tx.paymentMethod === 'Card' ? 'Cartão' : (tx.paymentMethod || 'Dividido')}
                         </span>
                         {/* Mobile date shown directly next to status */}
                         <span className="md:hidden font-mono text-[10px] text-[#8b949e] ml-auto">{formatDate(tx.date)}</span>

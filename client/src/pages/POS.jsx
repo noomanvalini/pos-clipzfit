@@ -481,30 +481,21 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
 
           <div className="space-y-2 pb-2">
             <button 
-              onClick={() => handleOpenNfModal('Cash')}
+              onClick={() => handleOpenNfModal('Card')}
               disabled={!cart.length}
               className="w-full bg-primary text-[#0d1117] font-bold py-3 px-4 rounded-lg hover:bg-primary/90 transition-all active:scale-[0.98] flex flex-col items-center justify-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-primary/10"
             >
-              <span className="material-symbols-outlined text-[20px] font-bold">payments</span>
-              <span className="text-xs uppercase tracking-wider font-mono font-bold">Pagar em Dinheiro</span>
+              <span className="material-symbols-outlined text-[20px] font-bold">credit_card</span>
+              <span className="text-xs uppercase tracking-wider font-mono font-bold">Pagar com cartão/pix</span>
             </button>
             
-            <div className="flex gap-2">
-              <button 
-                onClick={() => handleOpenNfModal('Card')}
-                disabled={!cart.length}
-                className="flex-1 bg-[#21262d] border border-[#30363d] text-[#f0f6fc] font-mono text-[11px] uppercase py-2.5 rounded-lg hover:bg-[#30363d] hover:border-[#8b949e] transition-colors cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Cartão
-              </button>
-              <button 
-                onClick={() => handleOpenNfModal('Split')}
-                disabled={!cart.length}
-                className="flex-1 bg-[#21262d] border border-[#30363d] text-[#f0f6fc] font-mono text-[11px] uppercase py-2.5 rounded-lg hover:bg-[#30363d] hover:border-[#8b949e] transition-colors cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Dividir
-              </button>
-            </div>
+            <button 
+              onClick={() => handleOpenNfModal('Cash')}
+              disabled={!cart.length}
+              className="w-full bg-[#21262d] border border-[#30363d] text-[#f0f6fc] font-mono text-xs uppercase py-2.5 rounded-lg hover:bg-[#30363d] hover:border-[#8b949e] transition-colors cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-center"
+            >
+              Pagar em Dinheiro
+            </button>
           </div>
         </div>
       </aside>

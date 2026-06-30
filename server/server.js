@@ -1685,29 +1685,45 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
     return res.status(400).json({ error: "ID de pagamento não fornecido." });
   }
 
-  try {
-    let pendingSaleId = null;
-    let paymentStatus = null;
+    try {
+      let pendingSaleId = null;
+      let paymentStatus = null;
+      let paymentMethodLabel = "Mercado Pago";
 
-    if (isMockTest) {
-      pendingSaleId = mockPendingSaleId;
-      paymentStatus = req.body?.status || "approved";
-      console.log(`[Webhook MP] Processando como teste simulado local. Status=${paymentStatus}`);
-    } else if (type === 'payment' || req.query?.topic === 'payment') {
-      const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MERCADO_PAGO_ACCESS_TOKEN;
-      
-      if (mpAccessToken && mpAccessToken.trim() !== "") {
-        const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-          headers: {
-            'Authorization': `Bearer ${mpAccessToken}`
-          }
-        });
+      if (isMockTest) {
+        pendingSaleId = mockPendingSaleId;
+        paymentStatus = req.body?.status || "approved";
+        console.log(`[Webhook MP] Processando como teste simulado local. Status=${paymentStatus}`);
+      } else if (type === 'payment' || req.query?.topic === 'payment') {
+        const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MERCADO_PAGO_ACCESS_TOKEN;
+        
+        if (mpAccessToken && mpAccessToken.trim() !== "") {
+          const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+            headers: {
+              'Authorization': `Bearer ${mpAccessToken}`
+            }
+          });
 
-        if (response.ok) {
-          const paymentData = await response.json();
-          paymentStatus = paymentData.status;
-          pendingSaleId = paymentData.external_reference;
-        } else {
+          if (response.ok) {
+            const paymentData = await response.json();
+            paymentStatus = paymentData.status;
+            pendingSaleId = paymentData.external_reference;
+
+            // Map friendly payment method label
+            const typeId = paymentData.payment_type_id;
+            const methodId = paymentData.payment_method_id;
+            if (typeId === 'bank_transfer' && methodId === 'pix') {
+              paymentMethodLabel = "Pix";
+            } else if (typeId === 'credit_card') {
+              paymentMethodLabel = "Cartão de Crédito";
+            } else if (typeId === 'debit_card') {
+              paymentMethodLabel = "Cartão de Débito";
+            } else if (typeId === 'ticket') {
+              paymentMethodLabel = "Boleto";
+            } else if (typeId) {
+              paymentMethodLabel = typeId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            }
+          } else {
           console.error(`[Webhook MP] Erro ao consultar pagamento ${paymentId}:`, await response.text());
           return res.status(502).json({ error: "Falha ao consultar detalhes do pagamento no Mercado Pago." });
         }
@@ -1815,7 +1831,7 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
             managerCommissionRate,
             totalCommissionRate,
             date: new Date().toISOString(),
-            paymentMethod: "Mercado Pago",
+            paymentMethod: paymentMethodLabel,
             customerCpf: pSale.customerCpf,
             customerEmail: pSale.customerEmail,
             items: pSale.items,
