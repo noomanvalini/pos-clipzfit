@@ -1736,96 +1736,140 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
     }
 
     if (paymentStatus === 'approved') {
-      // 1. Validar estoque local novamente (evitar inconsistências por race-conditions)
-      for (const item of pendingSale.items) {
-        const stockRef = db.collection('stocks').doc(`${pendingSale.affiliateId}_${item.productId}`);
-        const stockDoc = await stockRef.get();
-        const qtyAvailable = stockDoc.exists ? stockDoc.data().quantity : 0;
-        if (qtyAvailable < item.quantity) {
-          await pendingRef.update({ status: "Failed", error: `Estoque insuficiente para o produto: ${item.name}` });
-          return res.status(400).json({ error: "Estoque insuficiente durante a confirmação." });
-        }
-      }
+      try {
+        const txId = await db.runTransaction(async (transaction) => {
+          // Read pending doc again inside transaction to ensure atomicity
+          const pDoc = await transaction.get(pendingRef);
+          if (!pDoc.exists) {
+            throw new Error("pending-sale-not-found");
+          }
+          const pSale = pDoc.data();
+          if (pSale.status !== 'Pending') {
+            throw new Error("already-processed");
+          }
 
-      // 2. Decrementar estoque
-      for (const item of pendingSale.items) {
-        const stockRef = db.collection('stocks').doc(`${pendingSale.affiliateId}_${item.productId}`);
-        await stockRef.update({
-          quantity: admin.firestore.FieldValue.increment(-Number(item.quantity))
-        });
-      }
+          // Read stocks
+          const stockRefs = [];
+          for (const item of pSale.items) {
+            const sRef = db.collection('stocks').doc(`${pSale.affiliateId}_${item.productId}`);
+            const sDoc = await transaction.get(sRef);
+            stockRefs.push({ ref: sRef, doc: sDoc, item });
+          }
 
-      // 3. Obter dados atuais do lojista para split de comissão
-      const affRef = db.collection('affiliates').doc(pendingSale.affiliateId);
-      const affDoc = await affRef.get();
-      const affiliate = affDoc.exists ? affDoc.data() : { commissionRate: pendingSale.commissionRate };
-      
-      let storeCommissionRate = affiliate.commissionRate || pendingSale.commissionRate || 0;
-      let managerCommissionRate = 0;
-      let totalCommissionRate = storeCommissionRate;
-      let managerCommission = 0;
-      let storeCommission = pendingSale.amount * (storeCommissionRate / 100);
+          // Verify stock
+          for (const { doc, item } of stockRefs) {
+            const qtyAvailable = doc.exists ? doc.data().quantity : 0;
+            if (qtyAvailable < item.quantity) {
+              throw new Error(`insufficient-stock:${item.name}`);
+            }
+          }
 
-      if (affiliate.managerId) {
-        const mgrDoc = await db.collection('managers').doc(affiliate.managerId).get();
-        if (mgrDoc.exists) {
-          const manager = mgrDoc.data();
-          totalCommissionRate = manager.totalCommissionPercentage || 0;
-          managerCommissionRate = Math.max(0, totalCommissionRate - storeCommissionRate);
-          managerCommission = pendingSale.amount * (managerCommissionRate / 100);
-        }
-      }
+          // Read affiliate
+          const aRef = db.collection('affiliates').doc(pSale.affiliateId);
+          const aDoc = await transaction.get(aRef);
+          const affiliate = aDoc.exists ? aDoc.data() : { commissionRate: pSale.commissionRate };
 
-      const txId = `TRX-${Math.floor(100000 + Math.random() * 900000)}`;
-      const transaction = {
-        id: txId,
-        affiliateId: pendingSale.affiliateId,
-        affiliateName: pendingSale.affiliateName,
-        amount: pendingSale.amount,
-        tax: 0.00,
-        total: pendingSale.amount,
-        commission: Number(storeCommission.toFixed(2)),
-        managerCommission: Number(managerCommission.toFixed(2)),
-        managerId: affiliate.managerId || null,
-        storeCommissionRate,
-        managerCommissionRate,
-        totalCommissionRate,
-        date: new Date().toISOString(),
-        paymentMethod: "Mercado Pago",
-        customerCpf: pendingSale.customerCpf,
-        customerEmail: pendingSale.customerEmail,
-        items: pendingSale.items,
-        mpPaymentId: paymentId || "MOCK-PAYMENT"
-      };
-      await db.collection('transactions').doc(txId).set(transaction);
+          // Read manager if linked
+          let mRef = null;
+          let mDoc = null;
+          if (affiliate.managerId) {
+            mRef = db.collection('managers').doc(affiliate.managerId);
+            mDoc = await transaction.get(mRef);
+          }
 
-      // 4. Atualizar métricas acumuladas do lojista
-      await affRef.update({
-        totalSales: admin.firestore.FieldValue.increment(transaction.amount),
-        commissionBalance: admin.firestore.FieldValue.increment(transaction.commission)
-      });
+          // Writes
+          // Decrement stock
+          for (const { ref, doc, item } of stockRefs) {
+            const qtyAvailable = doc.exists ? doc.data().quantity : 0;
+            transaction.update(ref, {
+              quantity: qtyAvailable - Number(item.quantity)
+            });
+          }
 
-      // 5. Atualizar métricas do gerente se houver
-      if (affiliate.managerId) {
-        const mgrRef = db.collection('managers').doc(affiliate.managerId);
-        const mgrDoc = await mgrRef.get();
-        if (mgrDoc.exists) {
-          await mgrRef.update({
-            commissionBalance: admin.firestore.FieldValue.increment(transaction.managerCommission),
-            totalSales: admin.firestore.FieldValue.increment(transaction.amount)
+          // Commission split calculations
+          let storeCommissionRate = affiliate.commissionRate || pSale.commissionRate || 0;
+          let managerCommissionRate = 0;
+          let totalCommissionRate = storeCommissionRate;
+          let managerCommission = 0;
+          let storeCommission = pSale.amount * (storeCommissionRate / 100);
+
+          if (mRef && mDoc && mDoc.exists) {
+            const manager = mDoc.data();
+            totalCommissionRate = manager.totalCommissionPercentage || 0;
+            managerCommissionRate = Math.max(0, totalCommissionRate - storeCommissionRate);
+            managerCommission = pSale.amount * (managerCommissionRate / 100);
+          }
+
+          const newTxId = `TRX-${Math.floor(100000 + Math.random() * 900000)}`;
+          const txObj = {
+            id: newTxId,
+            affiliateId: pSale.affiliateId,
+            affiliateName: pSale.affiliateName,
+            amount: pSale.amount,
+            tax: 0.00,
+            total: pSale.amount,
+            commission: Number(storeCommission.toFixed(2)),
+            managerCommission: Number(managerCommission.toFixed(2)),
+            managerId: affiliate.managerId || null,
+            storeCommissionRate,
+            managerCommissionRate,
+            totalCommissionRate,
+            date: new Date().toISOString(),
+            paymentMethod: "Mercado Pago",
+            customerCpf: pSale.customerCpf,
+            customerEmail: pSale.customerEmail,
+            items: pSale.items,
+            mpPaymentId: paymentId || "MOCK-PAYMENT"
+          };
+
+          // Write transaction
+          const tDocRef = db.collection('transactions').doc(newTxId);
+          transaction.set(tDocRef, txObj);
+
+          // Update affiliate
+          const currentTotalSales = affiliate.totalSales || 0;
+          const currentCommissionBalance = affiliate.commissionBalance || 0;
+          transaction.update(aRef, {
+            totalSales: Number((currentTotalSales + txObj.amount).toFixed(2)),
+            commissionBalance: Number((currentCommissionBalance + txObj.commission).toFixed(2))
           });
+
+          // Update manager
+          if (mRef && mDoc && mDoc.exists) {
+            const manager = mDoc.data();
+            const currentMgrSales = manager.totalSales || 0;
+            const currentMgrBal = manager.commissionBalance || 0;
+            transaction.update(mRef, {
+              totalSales: Number((currentMgrSales + txObj.amount).toFixed(2)),
+              commissionBalance: Number((currentMgrBal + txObj.managerCommission).toFixed(2))
+            });
+          }
+
+          // Update pending sale
+          transaction.update(pendingRef, {
+            status: "Approved",
+            transactionId: newTxId,
+            updatedAt: new Date().toISOString()
+          });
+
+          return newTxId;
+        });
+
+        console.log(`[Webhook MP] Venda ${pendingSaleId} aprovada e faturada como ${txId}!`);
+        return res.status(200).json({ success: true, message: "Pagamento aprovado e processado com sucesso.", transactionId: txId });
+
+      } catch (txErr) {
+        if (txErr.message === 'already-processed') {
+          console.log(`[Webhook MP] Venda ${pendingSaleId} já foi processada anteriormente.`);
+          return res.status(200).json({ message: "Venda já processada anteriormente." });
+        } else if (txErr.message.startsWith('insufficient-stock:')) {
+          const prodName = txErr.message.split(':')[1];
+          await pendingRef.update({ status: "Failed", error: `Estoque insuficiente para o produto: ${prodName}` });
+          return res.status(400).json({ error: "Estoque insuficiente durante a confirmação." });
+        } else {
+          throw txErr;
         }
       }
-
-      // 5. Atualizar venda pendente para Aprovada
-      await pendingRef.update({
-        status: "Approved",
-        transactionId: txId,
-        updatedAt: new Date().toISOString()
-      });
-
-      console.log(`[Webhook MP] Venda ${pendingSaleId} aprovada e faturada como ${txId}!`);
-      return res.status(200).json({ success: true, message: "Pagamento aprovado e processado com sucesso.", transactionId: txId });
     } else if (paymentStatus === 'rejected') {
       await pendingRef.update({
         status: 'Rejected',
