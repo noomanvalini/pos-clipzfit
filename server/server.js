@@ -1633,9 +1633,22 @@ app.post('/api/checkout/preference', async (req, res) => {
           currency_id: "BRL"
         }));
 
+        const payerEmail = (customerEmail && customerEmail.trim() !== "") 
+          ? customerEmail.trim() 
+          : "vendas@clipz.fit"; // Fallback email to ensure payer is valid
+
+        const payer = {
+          email: payerEmail,
+          identification: {
+            type: "CPF",
+            number: customerCpf.replace(/\D/g, '')
+          }
+        };
+
         const response = await preference.create({
           body: {
             items: mpItems,
+            payer: payer,
             external_reference: pendingSaleId,
             back_urls: {
               success: `https://${req.get('host')}/checkout/success`,
