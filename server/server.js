@@ -1645,18 +1645,22 @@ app.post('/api/checkout/preference', async (req, res) => {
           }
         };
 
+        const requestHost = req.get('host');
+        const protocol = requestHost.includes('localhost') ? 'http' : 'https';
+        const baseUrl = process.env.PRODUCTION_URL || `${protocol}://${requestHost}`;
+
         const response = await preference.create({
           body: {
             items: mpItems,
             payer: payer,
             external_reference: pendingSaleId,
             back_urls: {
-              success: `https://${req.get('host')}/checkout/success`,
-              failure: `https://${req.get('host')}/checkout/failure`,
-              pending: `https://${req.get('host')}/checkout/pending`
+              success: `${baseUrl}/checkout/success`,
+              failure: `${baseUrl}/checkout/failure`,
+              pending: `${baseUrl}/checkout/pending`
             },
             auto_return: "approved",
-            notification_url: `https://${req.get('host')}/api/webhooks/mercadopago`
+            notification_url: `${baseUrl}/api/webhooks/mercadopago`
           }
         });
 
@@ -1672,7 +1676,6 @@ app.post('/api/checkout/preference', async (req, res) => {
     } else {
       console.log(`[MOCK MP] Token não configurado em MERCADOPAGO_ACCESS_TOKEN. Usando checkout mock para venda pendente: ${pendingSaleId}`);
     }
-
     res.status(200).json({ 
       success: true, 
       pendingSaleId,
@@ -1682,6 +1685,149 @@ app.post('/api/checkout/preference', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Helper to process approved sales, decrement stock, and credit commissions atomically
+async function processApprovedSale(pendingSaleId, paymentId, paymentData) {
+  const pendingRef = db.collection('pending_sales').doc(pendingSaleId);
+  
+  // Map friendly payment method label
+  let paymentMethodLabel = "Mercado Pago";
+  if (paymentData) {
+    const typeId = paymentData.payment_type_id;
+    const methodId = paymentData.payment_method_id;
+    if (typeId === 'bank_transfer' && methodId === 'pix') {
+      paymentMethodLabel = "Pix";
+    } else if (typeId === 'credit_card') {
+      paymentMethodLabel = "Cartão de Crédito";
+    } else if (typeId === 'debit_card') {
+      paymentMethodLabel = "Cartão de Débito";
+    } else if (typeId === 'ticket') {
+      paymentMethodLabel = "Boleto";
+    } else if (typeId) {
+      paymentMethodLabel = typeId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+  }
+
+  const txId = await db.runTransaction(async (transaction) => {
+    // Read pending doc inside transaction to ensure atomicity
+    const pDoc = await transaction.get(pendingRef);
+    if (!pDoc.exists) {
+      throw new Error("pending-sale-not-found");
+    }
+    const pSale = pDoc.data();
+    if (pSale.status !== 'Pending') {
+      throw new Error("already-processed");
+    }
+
+    // Read stocks
+    const stockRefs = [];
+    for (const item of pSale.items) {
+      const sRef = db.collection('stocks').doc(`${pSale.affiliateId}_${item.productId}`);
+      const sDoc = await transaction.get(sRef);
+      stockRefs.push({ ref: sRef, doc: sDoc, item });
+    }
+
+    // Verify stock
+    for (const { doc, item } of stockRefs) {
+      const qtyAvailable = doc.exists ? doc.data().quantity : 0;
+      if (qtyAvailable < item.quantity) {
+        throw new Error(`insufficient-stock:${item.name}`);
+      }
+    }
+
+    // Read affiliate
+    const aRef = db.collection('affiliates').doc(pSale.affiliateId);
+    const aDoc = await transaction.get(aRef);
+    const affiliate = aDoc.exists ? aDoc.data() : { commissionRate: pSale.commissionRate };
+
+    // Read manager if linked
+    let mRef = null;
+    let mDoc = null;
+    if (affiliate.managerId) {
+      mRef = db.collection('managers').doc(affiliate.managerId);
+      mDoc = await transaction.get(mRef);
+    }
+
+    // Writes
+    // Decrement stock
+    for (const { ref, doc, item } of stockRefs) {
+      const qtyAvailable = doc.exists ? doc.data().quantity : 0;
+      transaction.update(ref, {
+        quantity: qtyAvailable - Number(item.quantity)
+      });
+    }
+
+    // Commission split calculations
+    let storeCommissionRate = affiliate.commissionRate || pSale.commissionRate || 0;
+    let managerCommissionRate = 0;
+    let totalCommissionRate = storeCommissionRate;
+    let managerCommission = 0;
+    let storeCommission = pSale.amount * (storeCommissionRate / 100);
+
+    if (mRef && mDoc && mDoc.exists) {
+      const manager = mDoc.data();
+      totalCommissionRate = manager.totalCommissionPercentage || 0;
+      managerCommissionRate = Math.max(0, totalCommissionRate - storeCommissionRate);
+      managerCommission = pSale.amount * (managerCommissionRate / 100);
+    }
+
+    const newTxId = `TRX-${Math.floor(100000 + Math.random() * 900000)}`;
+    const txObj = {
+      id: newTxId,
+      affiliateId: pSale.affiliateId,
+      affiliateName: pSale.affiliateName,
+      amount: pSale.amount,
+      tax: 0.00,
+      total: pSale.amount,
+      commission: Number(storeCommission.toFixed(2)),
+      managerCommission: Number(managerCommission.toFixed(2)),
+      managerId: affiliate.managerId || null,
+      storeCommissionRate,
+      managerCommissionRate,
+      totalCommissionRate,
+      date: new Date().toISOString(),
+      paymentMethod: paymentMethodLabel,
+      customerCpf: pSale.customerCpf,
+      customerEmail: pSale.customerEmail,
+      items: pSale.items,
+      mpPaymentId: paymentId || "MOCK-PAYMENT"
+    };
+
+    // Write transaction
+    const tDocRef = db.collection('transactions').doc(newTxId);
+    transaction.set(tDocRef, txObj);
+
+    // Update affiliate
+    const currentTotalSales = affiliate.totalSales || 0;
+    const currentCommissionBalance = affiliate.commissionBalance || 0;
+    transaction.update(aRef, {
+      totalSales: Number((currentTotalSales + txObj.amount).toFixed(2)),
+      commissionBalance: Number((currentCommissionBalance + txObj.commission).toFixed(2))
+    });
+
+    // Update manager
+    if (mRef && mDoc && mDoc.exists) {
+      const manager = mDoc.data();
+      const currentMgrSales = manager.totalSales || 0;
+      const currentMgrBal = manager.commissionBalance || 0;
+      transaction.update(mRef, {
+        totalSales: Number((currentMgrSales + txObj.amount).toFixed(2)),
+        commissionBalance: Number((currentMgrBal + txObj.managerCommission).toFixed(2))
+      });
+    }
+
+    // Update pending sale
+    transaction.update(pendingRef, {
+      status: "Approved",
+      transactionId: newTxId,
+      updatedAt: new Date().toISOString()
+    });
+
+    return newTxId;
+  });
+
+  return txId;
+}
 
 // 17. POST /api/webhooks/mercadopago
 app.post('/api/webhooks/mercadopago', async (req, res) => {
@@ -1698,45 +1844,46 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
     return res.status(400).json({ error: "ID de pagamento não fornecido." });
   }
 
-    try {
-      let pendingSaleId = null;
-      let paymentStatus = null;
-      let paymentMethodLabel = "Mercado Pago";
+  try {
+    let pendingSaleId = null;
+    let paymentStatus = null;
+    let paymentMethodLabel = "Mercado Pago";
+    let paymentData = null;
 
-      if (isMockTest) {
-        pendingSaleId = mockPendingSaleId;
-        paymentStatus = req.body?.status || "approved";
-        console.log(`[Webhook MP] Processando como teste simulado local. Status=${paymentStatus}`);
-      } else if (type === 'payment' || req.query?.topic === 'payment') {
-        const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MERCADO_PAGO_ACCESS_TOKEN;
-        
-        if (mpAccessToken && mpAccessToken.trim() !== "") {
-          const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-            headers: {
-              'Authorization': `Bearer ${mpAccessToken}`
-            }
-          });
+    if (isMockTest) {
+      pendingSaleId = mockPendingSaleId;
+      paymentStatus = req.body?.status || "approved";
+      console.log(`[Webhook MP] Processando como teste simulado local. Status=${paymentStatus}`);
+    } else if (type === 'payment' || req.query?.topic === 'payment') {
+      const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MERCADO_PAGO_ACCESS_TOKEN;
+      
+      if (mpAccessToken && mpAccessToken.trim() !== "") {
+        const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+          headers: {
+            'Authorization': `Bearer ${mpAccessToken}`
+          }
+        });
 
-          if (response.ok) {
-            const paymentData = await response.json();
-            paymentStatus = paymentData.status;
-            pendingSaleId = paymentData.external_reference;
+        if (response.ok) {
+          paymentData = await response.json();
+          paymentStatus = paymentData.status;
+          pendingSaleId = paymentData.external_reference;
 
-            // Map friendly payment method label
-            const typeId = paymentData.payment_type_id;
-            const methodId = paymentData.payment_method_id;
-            if (typeId === 'bank_transfer' && methodId === 'pix') {
-              paymentMethodLabel = "Pix";
-            } else if (typeId === 'credit_card') {
-              paymentMethodLabel = "Cartão de Crédito";
-            } else if (typeId === 'debit_card') {
-              paymentMethodLabel = "Cartão de Débito";
-            } else if (typeId === 'ticket') {
-              paymentMethodLabel = "Boleto";
-            } else if (typeId) {
-              paymentMethodLabel = typeId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-            }
-          } else {
+          // Map friendly payment method label
+          const typeId = paymentData.payment_type_id;
+          const methodId = paymentData.payment_method_id;
+          if (typeId === 'bank_transfer' && methodId === 'pix') {
+            paymentMethodLabel = "Pix";
+          } else if (typeId === 'credit_card') {
+            paymentMethodLabel = "Cartão de Crédito";
+          } else if (typeId === 'debit_card') {
+            paymentMethodLabel = "Cartão de Débito";
+          } else if (typeId === 'ticket') {
+            paymentMethodLabel = "Boleto";
+          } else if (typeId) {
+            paymentMethodLabel = typeId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          }
+        } else {
           console.error(`[Webhook MP] Erro ao consultar pagamento ${paymentId}:`, await response.text());
           return res.status(502).json({ error: "Falha ao consultar detalhes do pagamento no Mercado Pago." });
         }
@@ -1766,127 +1913,9 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
 
     if (paymentStatus === 'approved') {
       try {
-        const txId = await db.runTransaction(async (transaction) => {
-          // Read pending doc again inside transaction to ensure atomicity
-          const pDoc = await transaction.get(pendingRef);
-          if (!pDoc.exists) {
-            throw new Error("pending-sale-not-found");
-          }
-          const pSale = pDoc.data();
-          if (pSale.status !== 'Pending') {
-            throw new Error("already-processed");
-          }
-
-          // Read stocks
-          const stockRefs = [];
-          for (const item of pSale.items) {
-            const sRef = db.collection('stocks').doc(`${pSale.affiliateId}_${item.productId}`);
-            const sDoc = await transaction.get(sRef);
-            stockRefs.push({ ref: sRef, doc: sDoc, item });
-          }
-
-          // Verify stock
-          for (const { doc, item } of stockRefs) {
-            const qtyAvailable = doc.exists ? doc.data().quantity : 0;
-            if (qtyAvailable < item.quantity) {
-              throw new Error(`insufficient-stock:${item.name}`);
-            }
-          }
-
-          // Read affiliate
-          const aRef = db.collection('affiliates').doc(pSale.affiliateId);
-          const aDoc = await transaction.get(aRef);
-          const affiliate = aDoc.exists ? aDoc.data() : { commissionRate: pSale.commissionRate };
-
-          // Read manager if linked
-          let mRef = null;
-          let mDoc = null;
-          if (affiliate.managerId) {
-            mRef = db.collection('managers').doc(affiliate.managerId);
-            mDoc = await transaction.get(mRef);
-          }
-
-          // Writes
-          // Decrement stock
-          for (const { ref, doc, item } of stockRefs) {
-            const qtyAvailable = doc.exists ? doc.data().quantity : 0;
-            transaction.update(ref, {
-              quantity: qtyAvailable - Number(item.quantity)
-            });
-          }
-
-          // Commission split calculations
-          let storeCommissionRate = affiliate.commissionRate || pSale.commissionRate || 0;
-          let managerCommissionRate = 0;
-          let totalCommissionRate = storeCommissionRate;
-          let managerCommission = 0;
-          let storeCommission = pSale.amount * (storeCommissionRate / 100);
-
-          if (mRef && mDoc && mDoc.exists) {
-            const manager = mDoc.data();
-            totalCommissionRate = manager.totalCommissionPercentage || 0;
-            managerCommissionRate = Math.max(0, totalCommissionRate - storeCommissionRate);
-            managerCommission = pSale.amount * (managerCommissionRate / 100);
-          }
-
-          const newTxId = `TRX-${Math.floor(100000 + Math.random() * 900000)}`;
-          const txObj = {
-            id: newTxId,
-            affiliateId: pSale.affiliateId,
-            affiliateName: pSale.affiliateName,
-            amount: pSale.amount,
-            tax: 0.00,
-            total: pSale.amount,
-            commission: Number(storeCommission.toFixed(2)),
-            managerCommission: Number(managerCommission.toFixed(2)),
-            managerId: affiliate.managerId || null,
-            storeCommissionRate,
-            managerCommissionRate,
-            totalCommissionRate,
-            date: new Date().toISOString(),
-            paymentMethod: paymentMethodLabel,
-            customerCpf: pSale.customerCpf,
-            customerEmail: pSale.customerEmail,
-            items: pSale.items,
-            mpPaymentId: paymentId || "MOCK-PAYMENT"
-          };
-
-          // Write transaction
-          const tDocRef = db.collection('transactions').doc(newTxId);
-          transaction.set(tDocRef, txObj);
-
-          // Update affiliate
-          const currentTotalSales = affiliate.totalSales || 0;
-          const currentCommissionBalance = affiliate.commissionBalance || 0;
-          transaction.update(aRef, {
-            totalSales: Number((currentTotalSales + txObj.amount).toFixed(2)),
-            commissionBalance: Number((currentCommissionBalance + txObj.commission).toFixed(2))
-          });
-
-          // Update manager
-          if (mRef && mDoc && mDoc.exists) {
-            const manager = mDoc.data();
-            const currentMgrSales = manager.totalSales || 0;
-            const currentMgrBal = manager.commissionBalance || 0;
-            transaction.update(mRef, {
-              totalSales: Number((currentMgrSales + txObj.amount).toFixed(2)),
-              commissionBalance: Number((currentMgrBal + txObj.managerCommission).toFixed(2))
-            });
-          }
-
-          // Update pending sale
-          transaction.update(pendingRef, {
-            status: "Approved",
-            transactionId: newTxId,
-            updatedAt: new Date().toISOString()
-          });
-
-          return newTxId;
-        });
-
+        const txId = await processApprovedSale(pendingSaleId, paymentId ? paymentId.toString() : null, paymentData);
         console.log(`[Webhook MP] Venda ${pendingSaleId} aprovada e faturada como ${txId}!`);
         return res.status(200).json({ success: true, message: "Pagamento aprovado e processado com sucesso.", transactionId: txId });
-
       } catch (txErr) {
         if (txErr.message === 'already-processed') {
           console.log(`[Webhook MP] Venda ${pendingSaleId} já foi processada anteriormente.`);
@@ -1920,6 +1949,74 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
 
   } catch (err) {
     console.error("[Webhook MP] Erro no processamento:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 18. POST /api/sales/sync/:pendingSaleId
+app.post('/api/sales/sync/:pendingSaleId', async (req, res) => {
+  const { pendingSaleId } = req.params;
+  const token = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MERCADO_PAGO_ACCESS_TOKEN;
+
+  if (!token || token.trim() === "") {
+    return res.status(400).json({ error: "Token do Mercado Pago não configurado." });
+  }
+
+  try {
+    const pendingRef = db.collection('pending_sales').doc(pendingSaleId);
+    const pendingDoc = await pendingRef.get();
+    if (!pendingDoc.exists) {
+      return res.status(404).json({ error: "Venda pendente não encontrada." });
+    }
+    const pendingSale = pendingDoc.data();
+    if (pendingSale.status !== 'Pending') {
+      return res.json({ success: true, message: `Venda já possui status: ${pendingSale.status}`, status: pendingSale.status });
+    }
+
+    // Consultar Mercado Pago por transações com esta referência externa
+    const response = await fetch(`https://api.mercadopago.com/v1/payments/search?external_reference=${pendingSaleId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      console.error(`[Sync API] Erro ao consultar Mercado Pago para ${pendingSaleId}:`, await response.text());
+      return res.status(502).json({ error: "Falha ao consultar Mercado Pago." });
+    }
+
+    const searchData = await response.json();
+    const payments = searchData.results || [];
+    
+    // Procura por um pagamento aprovado
+    const approvedPayment = payments.find(p => p.status === 'approved');
+
+    if (approvedPayment) {
+      const txId = await processApprovedSale(pendingSaleId, approvedPayment.id.toString(), approvedPayment);
+      console.log(`[Sync API] Venda ${pendingSaleId} aprovada e faturada manualmente como ${txId}!`);
+      return res.json({ success: true, message: "Pagamento identificado e venda aprovada com sucesso!", status: "Approved", transactionId: txId });
+    }
+
+    // Se houver pagamentos com status de rejeitado ou cancelado
+    const rejectedPayment = payments.find(p => p.status === 'rejected');
+    const cancelledPayment = payments.find(p => p.status === 'cancelled');
+
+    if (rejectedPayment) {
+      await pendingRef.update({ status: 'Rejected', updatedAt: new Date().toISOString() });
+      console.log(`[Sync API] Venda ${pendingSaleId} marcada como rejeitada.`);
+      return res.json({ success: true, message: "Pagamento foi rejeitado no Mercado Pago.", status: "Rejected" });
+    }
+
+    if (cancelledPayment) {
+      await pendingRef.update({ status: 'Cancelled', updatedAt: new Date().toISOString() });
+      console.log(`[Sync API] Venda ${pendingSaleId} marcada como cancelada.`);
+      return res.json({ success: true, message: "Pagamento foi cancelado no Mercado Pago.", status: "Cancelled" });
+    }
+
+    return res.json({ success: true, message: "Nenhum pagamento concluído encontrado no Mercado Pago. Venda continua pendente.", status: "Pending" });
+
+  } catch (err) {
+    console.error(`[Sync API] Erro ao sincronizar venda ${pendingSaleId}:`, err);
     res.status(500).json({ error: err.message });
   }
 });

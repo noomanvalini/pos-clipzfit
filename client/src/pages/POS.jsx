@@ -348,7 +348,7 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
                           Sem Estoque
                         </span>
                       </div>
-                    ) : product.stock < 5 ? (
+                    ) : product.stock <= 2 ? (
                       <span className="absolute top-2.5 left-2.5 bg-[#ff6e61] text-[#fafafa] font-mono text-[9px] px-1.5 py-[2px] rounded font-bold uppercase tracking-wider border border-[#ff6e61]/35">
                         Crítico: {product.stock}
                       </span>
