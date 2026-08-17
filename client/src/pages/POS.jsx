@@ -18,6 +18,29 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
   const [customerEmail, setCustomerEmail] = useState('');
   const [activeMobileTab, setActiveMobileTab] = useState('catalog');
 
+  // Salesperson states
+  const [sellers, setSellers] = useState([]);
+  const [selectedSellerId, setSelectedSellerId] = useState('');
+  const [newSellerName, setNewSellerName] = useState('');
+
+  // Fetch registered store salespeople
+  const fetchSellers = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/sellers?affiliateId=${activeAffiliateId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSellers(data);
+        if (data.length > 0) {
+          setSelectedSellerId(data[0].id);
+        } else {
+          setSelectedSellerId('new');
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching sellers:", err);
+    }
+  };
+
   // Fetch store-specific products and stock levels
   const fetchProductsAndStocks = async () => {
     try {
@@ -72,6 +95,7 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
 
   useEffect(() => {
     fetchProductsAndStocks();
+    fetchSellers();
 
     const handleClearCart = () => {
       setCart([]);
@@ -160,6 +184,23 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
       return;
     }
 
+    // Determine salesperson name
+    let sellerName = '';
+    if (selectedSellerId === 'new') {
+      if (!newSellerName.trim()) {
+        alert("Por favor, informe o nome do novo vendedor.");
+        return;
+      }
+      sellerName = newSellerName.trim();
+    } else {
+      const seller = sellers.find(s => s.id === selectedSellerId);
+      if (!seller) {
+        alert("Por favor, selecione um vendedor.");
+        return;
+      }
+      sellerName = seller.name;
+    }
+
     try {
       const itemsPayload = cart.map(item => ({
         productId: item.id,
@@ -179,7 +220,8 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
             affiliateId: activeAffiliateId,
             items: itemsPayload,
             customerCpf,
-            customerEmail: customerEmail.trim() || null
+            customerEmail: customerEmail.trim() || null,
+            sellerName
           })
         });
 
@@ -190,7 +232,9 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
           setIsNfModalOpen(false);
           setCustomerCpf('');
           setCustomerEmail('');
+          setNewSellerName('');
           fetchProductsAndStocks();
+          fetchSellers();
           refreshTrigger();
           
           // Redirecionar para o Mercado Pago
@@ -217,7 +261,8 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
           items: itemsPayload,
           paymentMethod: selectedPaymentMethod,
           customerCpf,
-          customerEmail: customerEmail.trim() || null
+          customerEmail: customerEmail.trim() || null,
+          sellerName
         })
       });
 
@@ -230,7 +275,9 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
         setIsNfModalOpen(false);
         setCustomerCpf('');
         setCustomerEmail('');
+        setNewSellerName('');
         fetchProductsAndStocks(); // Reload updated stocks
+        fetchSellers();
         refreshTrigger();
       } else {
         const errData = await res.json();
@@ -546,6 +593,39 @@ export default function POS({ activeAffiliateId, refreshTrigger }) {
                   placeholder="exemplo@email.com" 
                 />
               </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[#8b949e] font-bold uppercase tracking-wider text-[10px]">
+                  Vendedor da Loja (Obrigatório)
+                </label>
+                <select 
+                  value={selectedSellerId}
+                  onChange={(e) => setSelectedSellerId(e.target.value)}
+                  className="bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-[#f0f6fc] focus:border-primary focus:outline-none font-sans text-xs cursor-pointer"
+                  required
+                >
+                  {sellers.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                  <option value="new">+ Cadastrar Novo Vendedor</option>
+                </select>
+              </div>
+
+              {selectedSellerId === 'new' && (
+                <div className="flex flex-col gap-1 animate-fade-in">
+                  <label className="text-[#8b949e] font-bold uppercase tracking-wider text-[10px]">
+                    Nome do Novo Vendedor (Obrigatório)
+                  </label>
+                  <input 
+                    type="text" 
+                    value={newSellerName}
+                    onChange={(e) => setNewSellerName(e.target.value)}
+                    className="bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-[#f0f6fc] focus:border-primary focus:outline-none font-sans text-sm" 
+                    placeholder="Nome do vendedor" 
+                    required
+                  />
+                </div>
+              )}
 
               <div className="pt-4 flex gap-2.5">
                 <button 

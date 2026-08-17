@@ -870,7 +870,7 @@ app.post('/api/login', async (req, res) => {
 
 // 4. POST /api/sales
 app.post('/api/sales', async (req, res) => {
-  const { affiliateId, items, paymentMethod, customerCpf, customerEmail } = req.body;
+  const { affiliateId, items, paymentMethod, customerCpf, customerEmail, sellerName } = req.body;
 
   if (!affiliateId || !items || !items.length || !paymentMethod || !customerCpf) {
     return res.status(400).json({ error: "Dados da venda incompletos: CPF, filial, itens e meio de pagamento são obrigatórios." });
@@ -883,6 +883,24 @@ app.post('/api/sales', async (req, res) => {
       return res.status(404).json({ error: "Parceiro não encontrado." });
     }
     const affiliate = affDoc.data();
+
+    // Register seller if new
+    let cleanSellerName = null;
+    if (sellerName && sellerName.trim() !== "") {
+      cleanSellerName = sellerName.trim();
+      const sellerDocId = `${affiliateId}_${cleanSellerName.toLowerCase().replace(/\s+/g, '_')}`;
+      const sellerRef = db.collection('sellers').doc(sellerDocId);
+      const sellerDoc = await sellerRef.get();
+      if (!sellerDoc.exists) {
+        await sellerRef.set({
+          id: sellerDocId,
+          name: cleanSellerName,
+          affiliateId,
+          createdAt: new Date().toISOString()
+        });
+        console.log(`Registered new seller ${cleanSellerName} for affiliate ${affiliateId}`);
+      }
+    }
 
     // Verify stock availability
     for (const item of items) {
@@ -945,6 +963,7 @@ app.post('/api/sales', async (req, res) => {
       paymentMethod,
       customerCpf,
       customerEmail: customerEmail || null,
+      sellerName: cleanSellerName,
       items
     };
 
@@ -1563,11 +1582,79 @@ app.post('/api/notifications/clear', async (req, res) => {
   }
 });
 
+// GET /api/sellers
+app.get('/api/sellers', async (req, res) => {
+  const { affiliateId } = req.query;
+  if (!affiliateId) {
+    return res.status(400).json({ error: "Parâmetro affiliateId é obrigatório." });
+  }
+
+  try {
+    const snapshot = await db.collection('sellers').where('affiliateId', '==', affiliateId).get();
+    const list = [];
+    snapshot.forEach(doc => {
+      list.push(doc.data());
+    });
+    // Sort alphabetically by name
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/sellers/stats
+app.get('/api/admin/sellers/stats', async (req, res) => {
+  try {
+    const sellersSnap = await db.collection('sellers').get();
+    const sellers = [];
+    sellersSnap.forEach(doc => {
+      sellers.push(doc.data());
+    });
+
+    const txsSnap = await db.collection('transactions').get();
+    const txs = [];
+    txsSnap.forEach(doc => {
+      txs.push(doc.data());
+    });
+
+    const affiliatesSnap = await db.collection('affiliates').get();
+    const affiliatesMap = {};
+    affiliatesSnap.forEach(doc => {
+      const data = doc.data();
+      affiliatesMap[doc.id] = data.name;
+    });
+
+    const sellersStats = sellers.map(seller => {
+      const sellerTxs = txs.filter(tx => 
+        tx.affiliateId === seller.affiliateId && 
+        tx.sellerName && 
+        tx.sellerName.toLowerCase() === seller.name.toLowerCase()
+      );
+      
+      const totalSalesCount = sellerTxs.length;
+      const totalSalesAmount = sellerTxs.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+
+      return {
+        ...seller,
+        affiliateName: affiliatesMap[seller.affiliateId] || "Desconhecido",
+        totalSalesCount,
+        totalSalesAmount,
+        transactions: sellerTxs.sort((a, b) => new Date(b.date) - new Date(a.date))
+      };
+    });
+
+    res.json(sellersStats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Mercado Pago Checkout Pro Draft Endpoints
 
 // 16. POST /api/checkout/preference
 app.post('/api/checkout/preference', async (req, res) => {
-  const { affiliateId, items, customerCpf, customerEmail } = req.body;
+  const { affiliateId, items, customerCpf, customerEmail, sellerName } = req.body;
   
   if (!affiliateId || !items || !items.length || !customerCpf) {
     return res.status(400).json({ error: "Dados incompletos para geração do checkout." });
@@ -1606,6 +1693,7 @@ app.post('/api/checkout/preference', async (req, res) => {
       commissionRate: affiliate.commissionRate,
       customerCpf,
       customerEmail: customerEmail || null,
+      sellerName: sellerName || null,
       items,
       status: "Pending",
       createdAt: new Date().toISOString()
@@ -1719,6 +1807,17 @@ async function processApprovedSale(pendingSaleId, paymentId, paymentData) {
       throw new Error("already-processed");
     }
 
+    // Read seller doc if name is provided
+    let cleanSellerName = null;
+    let sellerRef = null;
+    let sellerDoc = null;
+    if (pSale.sellerName && pSale.sellerName.trim() !== "") {
+      cleanSellerName = pSale.sellerName.trim();
+      const sellerDocId = `${pSale.affiliateId}_${cleanSellerName.toLowerCase().replace(/\s+/g, '_')}`;
+      sellerRef = db.collection('sellers').doc(sellerDocId);
+      sellerDoc = await transaction.get(sellerRef);
+    }
+
     // Read stocks
     const stockRefs = [];
     for (const item of pSale.items) {
@@ -1771,6 +1870,16 @@ async function processApprovedSale(pendingSaleId, paymentId, paymentData) {
       managerCommission = pSale.amount * (managerCommissionRate / 100);
     }
 
+    // Register seller if new
+    if (cleanSellerName && sellerRef && sellerDoc && !sellerDoc.exists) {
+      transaction.set(sellerRef, {
+        id: sellerRef.id,
+        name: cleanSellerName,
+        affiliateId: pSale.affiliateId,
+        createdAt: new Date().toISOString()
+      });
+    }
+
     const newTxId = `TRX-${Math.floor(100000 + Math.random() * 900000)}`;
     const txObj = {
       id: newTxId,
@@ -1789,6 +1898,7 @@ async function processApprovedSale(pendingSaleId, paymentId, paymentData) {
       paymentMethod: paymentMethodLabel,
       customerCpf: pSale.customerCpf,
       customerEmail: pSale.customerEmail,
+      sellerName: cleanSellerName,
       items: pSale.items,
       mpPaymentId: paymentId || "MOCK-PAYMENT"
     };

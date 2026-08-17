@@ -6,7 +6,24 @@ export default function AdminDashboard({ activeAffiliateId, refreshTrigger }) {
   const [affiliates, setAffiliates] = useState([]);
   const [managers, setManagers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeSubTab, setActiveSubTab] = useState('vendors'); // 'vendors' | 'managers'
+  const [activeSubTab, setActiveSubTab] = useState('vendors'); // 'vendors' | 'managers' | 'sellers'
+
+  // Salesperson stats states
+  const [sellersStats, setSellersStats] = useState([]);
+  const [selectedSeller, setSelectedSeller] = useState(null);
+  const [isSellerModalOpen, setIsSellerModalOpen] = useState(false);
+
+  const fetchSellersStats = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/sellers/stats`);
+      if (res.ok) {
+        const data = await res.json();
+        setSellersStats(data);
+      }
+    } catch (err) {
+      console.error("Error fetching sellers stats:", err);
+    }
+  };
 
   // Vendor Form states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -51,7 +68,7 @@ export default function AdminDashboard({ activeAffiliateId, refreshTrigger }) {
 
   const loadAllData = async () => {
     setLoading(true);
-    await Promise.all([fetchAffiliates(), fetchManagers()]);
+    await Promise.all([fetchAffiliates(), fetchManagers(), fetchSellersStats()]);
     setLoading(false);
   };
 
@@ -435,9 +452,19 @@ export default function AdminDashboard({ activeAffiliateId, refreshTrigger }) {
           >
             GERENTES REGIONAIS
           </button>
+          <button 
+            onClick={() => setActiveSubTab('sellers')}
+            className={`px-5 py-3 font-bold tracking-wider transition-all border-b-2 hover:text-[#f0f6fc] cursor-pointer ${
+              activeSubTab === 'sellers' 
+                ? 'border-primary text-primary' 
+                : 'border-transparent text-[#8b949e]'
+            }`}
+          >
+            VENDEDORES
+          </button>
         </div>
 
-        {activeSubTab === 'vendors' ? (
+        {activeSubTab === 'vendors' && (
           /* Vendors/Lojistas Table */
           <div className="premium-card p-4 md:p-6 overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[800px]">
@@ -514,7 +541,9 @@ export default function AdminDashboard({ activeAffiliateId, refreshTrigger }) {
               </tbody>
             </table>
           </div>
-        ) : (
+        )}
+
+        {activeSubTab === 'managers' && (
           /* Managers Table */
           <div className="premium-card p-4 md:p-6 overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[800px]">
@@ -575,6 +604,59 @@ export default function AdminDashboard({ activeAffiliateId, refreshTrigger }) {
                       </tr>
                     );
                   })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeSubTab === 'sellers' && (
+          <div className="premium-card p-4 md:p-6 overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[800px]">
+              <thead>
+                <tr className="border-b border-[#21262d]">
+                  <th className="pb-4 pt-2 px-4 uppercase font-mono text-xs text-[#8b949e] tracking-wider font-semibold">Vendedor</th>
+                  <th className="pb-4 pt-2 px-4 uppercase font-mono text-xs text-[#8b949e] tracking-wider font-semibold">Loja / Ponto de Venda</th>
+                  <th className="pb-4 pt-2 px-4 uppercase font-mono text-xs text-[#8b949e] tracking-wider font-semibold text-right">Qtd Vendas</th>
+                  <th className="pb-4 pt-2 px-4 uppercase font-mono text-xs text-[#8b949e] tracking-wider font-semibold text-right">Total Faturado</th>
+                  <th className="pb-4 pt-2 px-4 uppercase font-mono text-xs text-[#8b949e] tracking-wider font-semibold text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sellersStats.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="py-8 text-center text-sm font-mono text-[#8b949e]">
+                      Nenhum vendedor cadastrado ou com vendas registradas.
+                    </td>
+                  </tr>
+                ) : (
+                  sellersStats.map((seller) => (
+                    <tr 
+                      key={seller.id} 
+                      onClick={() => {
+                        setSelectedSeller(seller);
+                        setIsSellerModalOpen(true);
+                      }}
+                      className="border-b border-[#21262d] hover:bg-[#161b22] transition-all cursor-pointer"
+                      title="Clique para ver vendas detalhadas"
+                    >
+                      <td className="py-4 px-4 font-sans text-sm text-[#f0f6fc] font-semibold">{seller.name}</td>
+                      <td className="py-4 px-4 font-sans text-sm text-[#8b949e]">{seller.affiliateName}</td>
+                      <td className="py-4 px-4 font-sans text-sm text-[#8b949e] text-right">
+                        <span className="bg-[#21262d] border border-[#30363d] px-2 py-0.5 rounded font-mono text-xs text-[#f0f6fc]">
+                          {seller.totalSalesCount}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4 font-mono text-sm text-primary font-bold text-right">
+                        R$ {(seller.totalSalesAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <span className="material-symbols-outlined text-[#8b949e] hover:text-primary transition-colors text-[18px]">
+                          visibility
+                        </span>
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
@@ -818,6 +900,82 @@ export default function AdminDashboard({ activeAffiliateId, refreshTrigger }) {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Seller Transactions Modal */}
+      {isSellerModalOpen && selectedSeller && (
+        <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+          <div className="glass-modal rounded-xl p-6 max-w-3xl w-full border border-[#30363d] relative max-h-[90vh] flex flex-col">
+            <button 
+              onClick={() => {
+                setIsSellerModalOpen(false);
+                setSelectedSeller(null);
+              }}
+              className="absolute top-3 right-3 text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#161b22] w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
+
+            <h3 className="font-sans text-lg font-bold text-[#f0f6fc] mb-1 flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">badge</span>
+              Vendas de: {selectedSeller.name}
+            </h3>
+            <p className="font-sans text-xs text-[#8b949e] mb-4">
+              Loja: {selectedSeller.affiliateName} | Total Faturado: <span className="text-primary font-mono font-bold">R$ {selectedSeller.totalSalesAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            </p>
+
+            <div className="overflow-y-auto flex-1 border border-[#21262d] rounded-lg">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-[#21262d] bg-[#161b22]/50 font-mono text-[11px] text-[#8b949e]">
+                    <th className="py-2.5 px-3 uppercase tracking-wider font-semibold">Transação</th>
+                    <th className="py-2.5 px-3 uppercase tracking-wider font-semibold">Data</th>
+                    <th className="py-2.5 px-3 uppercase tracking-wider font-semibold">Pagamento</th>
+                    <th className="py-2.5 px-3 uppercase tracking-wider font-semibold text-right">Valor</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#21262d]">
+                  {selectedSeller.transactions.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" className="py-6 text-center text-xs font-mono text-[#8b949e]">
+                        Nenhuma transação aprovada para este vendedor.
+                      </td>
+                    </tr>
+                  ) : (
+                    selectedSeller.transactions.map((tx) => (
+                      <tr key={tx.id} className="hover:bg-[#161b22]/20 font-mono text-xs text-[#f0f6fc]">
+                        <td className="py-2.5 px-3 font-semibold">{tx.id}</td>
+                        <td className="py-2.5 px-3 text-[#8b949e]">
+                          {new Date(tx.date).toLocaleDateString('pt-BR')} {new Date(tx.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="bg-[#21262d] text-[#8b949e] text-[10px] px-1.5 py-[1px] rounded uppercase">
+                            {tx.paymentMethod === 'Cash' ? 'Dinheiro' : tx.paymentMethod === 'Card' ? 'Cartão' : (tx.paymentMethod || 'Dividido')}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-primary font-bold">
+                          R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="pt-4 flex justify-end">
+              <button 
+                type="button" 
+                onClick={() => {
+                  setIsSellerModalOpen(false);
+                  setSelectedSeller(null);
+                }}
+                className="bg-[#21262d] hover:bg-[#30363d] text-[#f0f6fc] font-mono text-xs px-5 py-2.5 rounded-lg transition-colors cursor-pointer active:scale-95 text-center"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}
